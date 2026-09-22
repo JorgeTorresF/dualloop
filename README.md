@@ -102,17 +102,34 @@ pages of maths you can read end to end.
 
 ## Installation
 
+DualLoop is a library, so install it into a virtual environment:
+
 ```bash
-pip install "dualloop @ git+https://github.com/JorgeTorresF/dualloop.git"
+python3 -m venv .venv && source .venv/bin/activate
+pip install "dualloop @ git+https://github.com/JorgeTorresF/dualloop.git@v0.1.0"
 ```
 
-Or in development mode, cloning the repo:
+Or with [uv](https://github.com/astral-sh/uv):
+
+```bash
+uv venv && uv pip install "dualloop @ git+https://github.com/JorgeTorresF/dualloop.git@v0.1.0"
+```
+
+> A bare `pip install` into your system Python will be refused on Homebrew
+> macOS and on most current Linux distributions, which mark it externally
+> managed (PEP 668) with an `externally-managed-environment` error. That
+> refusal is doing its job: use a virtual environment.
+
+Drop the `@v0.1.0` to track `master` instead of the released version.
+
+For development, cloning the repo:
 
 ```bash
 git clone https://github.com/JorgeTorresF/dualloop.git
 cd dualloop
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
+pytest
 ```
 
 No required dependencies beyond `httpx`. The `demo` extra adds
