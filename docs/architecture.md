@@ -1,203 +1,202 @@
-# Arquitectura de DualLoop
+# DualLoop architecture
 
-Este documento explica las decisiones de diseño y las conecta explícitamente
-con los dos problemas de fondo identificados en la investigación previa
-("Paradigmas faltantes en arquitectura IA"), citando fuente concreta para
-cada afirmación.
+This document explains the design decisions and ties each of them
+explicitly to the two underlying problems identified in the prior research,
+citing a concrete source for every claim.
 
-## Los dos problemas de fondo
+*Lee este documento [en español](architecture.es.md).*
 
-Dado un LLM de razonamiento (System 2) y un clasificador tipado rápido tipo
-Jev (System 1), la investigación encontró que la pieza que falta no es un
-tercer tipo de modelo, sino:
+## The two underlying problems
 
-1. **Un árbitro aprendido y auditable entre motores heterogéneos.** La
-   literatura de routing/cascading —"A Unified Approach to Routing and
+Given a reasoning LLM (System 2) and a fast typed classifier such as Jev
+(System 1), the research found that the missing piece is not a third kind
+of model, but:
+
+1. **A learned, auditable arbiter across heterogeneous engines.** The
+   routing/cascading literature — "A Unified Approach to Routing and
    Cascading for LLMs", [arXiv:2410.10347](https://arxiv.org/abs/2410.10347);
    CP-Router, [arXiv:2505.19970](https://arxiv.org/abs/2505.19970); AAMC,
-   [ScienceDirect S0925231226005898](https://www.sciencedirect.com/science/article/pii/S0925231226005898)—
-   arbitra siempre entre **variantes de LLM** (fuerte/débil, LLM/LRM,
+   [ScienceDirect S0925231226005898](https://www.sciencedirect.com/science/article/pii/S0925231226005898)
+   — always arbitrates between **LLM variants** (strong/weak, LLM/LRM,
    SLM/LLM). Meta-Reasoner
-   ([arXiv:2502.19918](https://arxiv.org/abs/2502.19918)) ni siquiera
-   enruta entre modelos: opera dentro de un único LLM y usa bandits
-   contextuales para elegir *estrategia de razonamiento* (retroceder,
-   cambiar de enfoque, reiniciar). Comparte con DualLoop la idea de un
-   bandit que aprende meta-decisiones, pero su espacio de acciones son
-   estrategias, no motores.
+   ([arXiv:2502.19918](https://arxiv.org/abs/2502.19918)) does not even
+   route between models: it operates inside a single LLM and uses
+   contextual bandits to choose a *reasoning strategy* (backtrack, switch
+   approach, restart). It shares with DualLoop the idea of a bandit that
+   learns meta-decisions, but its action space is strategies, not engines.
 
-   Ningún trabajo revisado formaliza el arbitraje entre un LLM, un
-   clasificador tipado no-generativo y reglas deterministas bajo un
-   contrato común y auditable.
-2. **Cierre del bucle decisión → resultado → recalibración sin
-   reentrenamiento manual.** Mem0 ("State of AI Agent Memory 2026",
+   No reviewed work formalises arbitration between an LLM, a
+   non-generative typed classifier and deterministic rules under one
+   common, auditable contract.
+2. **Closing the loop decision → outcome → recalibration without manual
+   retraining.** Mem0 ("State of AI Agent Memory 2026",
    [mem0.ai/blog/state-of-ai-agent-memory-2026](https://mem0.ai/blog/state-of-ai-agent-memory-2026))
-   documenta que la memoria *procedimental* de agentes "sigue en etapa
-   temprana". Los frameworks de "decision provenance" (PROV-AGENT; "A
-   Framework for Assessing AI Agent Decisions and Outcomes in AutoML
-   Pipelines", [arXiv:2602.22442](https://arxiv.org/html/2602.22442v1)) se
-   detienen deliberadamente en auditoría para humanos: el propio paper
-   aclara que su "Evaluation Agent" "no implementa auto-ajuste automatizado"
-   y que sus salidas "apoyan la depuración humana en el bucle en lugar de la
-   corrección autónoma de bucle cerrado". JitRL
-   ([arXiv:2601.18510](https://arxiv.org/abs/2601.18510)) es el prototipo
-   más cercano a una solución sin gradientes, pero requiere acceso a los
-   logits del modelo (no funciona con APIs cerradas de caja negra) y se
-   presenta como contribución de investigación, no como librería usable.
+   documents that *procedural* agent memory "remains in an early stage".
+   "Decision provenance" frameworks (PROV-AGENT; "A Framework for
+   Assessing AI Agent Decisions and Outcomes in AutoML Pipelines",
+   [arXiv:2602.22442](https://arxiv.org/html/2602.22442v1)) deliberately
+   stop at auditability for humans: that paper states its "Evaluation
+   Agent" does not implement automated self-adjustment, and that its
+   outputs support human-in-the-loop debugging rather than autonomous
+   closed-loop correction. JitRL
+   ([arXiv:2601.18510](https://arxiv.org/abs/2601.18510)) is the closest
+   prototype to a gradient-free solution, but it needs access to the
+   model's logits — so it does not work with closed black-box APIs — and
+   presents itself as a research contribution rather than a usable library.
 
-DualLoop ataca ambos problemas con matemática simple, interpretable y
-sin gradientes — deliberadamente más humilde que un enfoque neuronal, a
-cambio de funcionar con cualquier motor (incluidas APIs cerradas) y de ser
-auditable por cualquiera que lea el código.
+DualLoop attacks both problems with simple, interpretable, gradient-free
+maths — deliberately humbler than a neural approach, in exchange for
+working with any engine (closed APIs included) and being auditable by
+anyone who reads the code.
 
-## Componentes
+## Components
 
 ```
-Question (contrato compartido: choice / score / noul, igual que simple-jev)
+Question (shared contract: choice / score / noul, same as simple-jev)
     │
     ▼
 Arbiter.decide()
-    │  1. ReliabilityBandit.rank()   -> orden de consulta (Thompson sampling
-    │                                    Beta-Bernoulli, sesgo inicial por coste)
-    │  2. engine.decide()             -> EngineOutput crudo del motor consultado
-    │  3. ConfidenceCalibrator        -> confianza calibrada (histogram binning
-    │                                    Beta-Bernoulli online)
-    │  4. AdaptiveThreshold.get()     -> ¿aceptar o escalar al siguiente motor?
+    │  1. ReliabilityBandit.rank()   -> consultation order (Beta-Bernoulli
+    │                                   Thompson sampling, cost-biased cold start)
+    │  2. engine.decide()            -> raw EngineOutput from the engine consulted
+    │  3. ConfidenceCalibrator       -> calibrated confidence (online
+    │                                   Beta-Bernoulli histogram binning)
+    │  4. AdaptiveThreshold.get()    -> accept, or escalate to the next engine?
     ▼
-Decision (registro auditable: votos, motor elegido, umbral usado, desacuerdo)
+Decision (auditable record: votes, chosen engine, threshold used, disagreement)
     │
-    ▼  ... tiempo despues, se observa el resultado real ...
+    ▼  ... later, the real outcome is observed ...
     ▼
 DualLoop.report_outcome()
-    │  actualiza en O(1), sin gradientes:
-    │    - ConfidenceCalibrator.update()   (por motor y task_type)
-    │    - ReliabilityBandit.update()      (fiabilidad del motor elegido)
-    │    - AdaptiveThreshold.update_on_accepted_outcome()  (paso constante)
+    │  updates in O(1), gradient-free:
+    │    - ConfidenceCalibrator.update()   (per engine and task_type)
+    │    - ReliabilityBandit.update()      (reliability of the chosen engine)
+    │    - AdaptiveThreshold.update_on_accepted_outcome()  (constant step)
     ▼
-Estado recalibrado, listo para la siguiente decision
+Recalibrated state, ready for the next decision
 ```
 
-### 1. Contrato compartido (`Question`)
+### 1. Shared contract (`Question`)
 
-Se reutiliza el esquema `choice`/`score`/`noul` de simple-jev para las tres
-familias de motores (LLM, Jev, reglas). Esto es en sí mismo parte de la
-pieza que falta: la investigación no encontró ningún framework de
-orquestación mainstream que defina un contrato de decisión compartido entre
-un LLM y un clasificador no-generativo — cada uno resuelve el routing solo
-entre variantes de LLM (ver
-[estado_actual_llm_clasificador.md](../../research_notes/Paradigmas%20faltantes%20en%20arquitectura%20IA/estado_actual_llm_clasificador.md)
-en el informe de investigación previo).
+The `choice`/`score`/`noul` schema from simple-jev is reused across all
+three engine families (LLM, Jev, rules). That is itself part of the missing
+piece: the research found no mainstream orchestration framework defining a
+shared decision contract between an LLM and a non-generative classifier —
+each of them solves routing only between LLM variants.
 
-### 2. Calibración por bins Beta-Bernoulli (`ConfidenceCalibrator`)
+### 2. Beta-Bernoulli histogram calibration (`ConfidenceCalibrator`)
 
-La confianza cruda de un clasificador tipado, la autoreportada de un LLM y
-la certeza fija de una regla no son comparables sin calibrar. Se usa
-histogram binning con actualización bayesiana cerrada:
+The raw confidence of a typed classifier, the self-reported confidence of
+an LLM and the fixed certainty of a rule are not comparable without
+calibration. Histogram binning with a closed-form Bayesian update is used:
 
-- Cada bin de confianza `[i/n, (i+1)/n)` mantiene un posterior
-  `Beta(alpha, beta)` sobre "¿acertó cuando reportó una confianza en este
-  rango?".
-- `calibrate(raw)` devuelve una mezcla entre la confianza cruda y la media
-  del posterior del bin, con peso creciente hacia la evidencia real a
-  medida que se acumulan observaciones (mezcla suave para evitar sobreajuste
-  en frío).
-- `update(raw, correct)` es la única operación necesaria para
-  "recalibrarse solo": una actualización conjugada en O(1), sin gradientes
-  ni reentrenamiento — lo suficientemente simple como para auditar leyendo
-  el código fuente completo (< 80 líneas).
+- Each confidence bin `[i/n, (i+1)/n)` keeps a `Beta(alpha, beta)`
+  posterior over "was it right when it reported a confidence in this
+  range?".
+- `calibrate(raw)` returns a blend of the raw confidence and the bin
+  posterior's mean, weighted increasingly towards real evidence as
+  observations accumulate (a soft blend, to avoid overfitting on a cold
+  start).
+- `update(raw, correct)` is the only operation needed to "recalibrate
+  itself": a conjugate update in O(1), no gradients and no retraining —
+  simple enough to audit by reading the whole source file (< 80 lines).
 
-Esto es deliberadamente más simple que JitRL (que reponderar logits
-requiere acceso al modelo) — el trade-off es menos elegante matemáticamente,
-pero funciona con cualquier motor, incluidas APIs de caja negra.
+This is deliberately simpler than JitRL, whose logit reweighting requires
+access to the model. The trade-off is less mathematical elegance in
+exchange for working with any engine, black-box APIs included.
 
-### 3. Bandit de fiabilidad (`ReliabilityBandit`)
+### 3. Reliability bandit (`ReliabilityBandit`)
 
-Determina el **orden** de la cascada (qué motor probar primero), no la
-respuesta final. Thompson sampling Beta-Bernoulli por `(task_type, motor)`,
-con un sesgo inicial optimista a favor de motores baratos (declarado vía
-`relative_cost`) para que la exploración en frío no empiece al azar. El
-sesgo se diluye en cuanto llegan outcomes reales — no es una regla fija de
-"siempre empezar por el barato", es una prioridad inicial que el propio
-bandit puede revertir si el motor barato resulta poco fiable para un
-`task_type` concreto.
+Determines the **order** of the cascade — which engine to try first — not
+the final answer. Beta-Bernoulli Thompson sampling per `(task_type,
+engine)`, with an optimistic initial bias towards cheap engines (declared
+via `relative_cost`) so that cold-start exploration does not begin at
+random. The bias dilutes as soon as real outcomes arrive: it is not a fixed
+"always start cheap" rule but an initial prior the bandit itself can
+reverse if the cheap engine turns out to be unreliable for a given
+`task_type`.
 
-### 4. Umbral adaptativo (`AdaptiveThreshold`)
+### 4. Adaptive threshold (`AdaptiveThreshold`)
 
-Aproximación estocástica de **paso constante**: el umbral de aceptación por
-`task_type` se desplaza hacia el punto donde la tasa de error de las
-respuestas aceptadas iguala una tasa objetivo configurable
-(`target_error_rate`, 5% por defecto).
+**Constant-step** stochastic approximation: the per-`task_type` acceptance
+threshold moves towards the point where the error rate of accepted answers
+equals a configurable target (`target_error_rate`, 5% by default). If the
+observed error exceeds the target the threshold rises (stricter, escalates
+more); if it is lower the threshold falls (less needless escalation). This
+replaces a hand-set fixed threshold, which is what the commercial routers
+reviewed still use (RouteLLM, OpenRouter): their "when to escalate"
+threshold is a static hyperparameter, not something that adjusts itself
+with experience.
 
-El paso es constante y no decreciente, así que esto **no converge en el
-sentido de Robbins-Monro**: oscila alrededor del equilibrio en vez de
-asentarse en él. Es deliberado — con paso decreciente el umbral acabaría
-congelado, y aquí se espera que la fiabilidad de los motores cambie con el
-tiempo. El equilibrio sí es el correcto: `p·lr·(1−t) = (1−p)·lr·t` se
-cumple exactamente en `p = t`.
+The step is constant rather than decreasing, so this **does not converge in
+the Robbins-Monro sense**: it oscillates around the equilibrium instead of
+settling on it. That is deliberate — with a decreasing step the threshold
+would eventually freeze, and engine reliability is expected to drift over
+time. The equilibrium is nonetheless the right one: `p·lr·(1−t) =
+(1−p)·lr·t` holds exactly at `p = t`.
 
-Con `lr=0.01` un fallo mueve el umbral +0.0095 en absoluto, y un acierto lo
-baja 0.0005. En relativo depende del rango: sobre el `[0.8, 0.97]` por
-defecto (0.17 de ancho) eso es un 5.6 % del recorrido posible; sobre un
-rango más permisivo como `[0.5, 0.97]` sería un 2 %. Conviene tenerlo
-presente porque `lr` y `lo` interactúan: subir el suelo estrecha el rango y
-vuelve relativamente más agresivo el mismo `lr`. Si el error observado supera el
-objetivo, el umbral sube (más exigente, escala más); si es menor, baja
-(menos escalamiento innecesario). Esto sustituye a un umbral fijo puesto a
-mano, que es lo que hacen hoy los routers comerciales revisados
-(RouteLLM, OpenRouter) — su umbral de "cuándo escalar" es un
-hiperparámetro estático, no algo que se ajuste solo con la experiencia.
+With `lr=0.01` a wrong outcome moves the threshold +0.0095 in absolute
+terms, and a correct one lowers it by 0.0005. In relative terms it depends
+on the range: over the default `[0.8, 0.97]` (0.17 wide) that is 5.6% of
+the possible travel; over a more permissive range such as `[0.5, 0.97]` it
+would be 2%. Worth keeping in mind, because `lr` and `lo` interact: raising
+the floor narrows the range and makes the same `lr` relatively more
+aggressive.
 
-### 5. Auditoría (`Decision`, `explain()`)
+Note also that `lo` is the system's real floor. When the engines perform
+better than `target_error_rate` the threshold drifts down until it rests on
+`lo` and stays there — past that point it is `lo`, not the target error
+rate, that decides what gets accepted.
 
-Cada decisión registra: qué motores se consultaron y en qué orden, sus
-salidas crudas y calibradas, el umbral vigente en ese momento, y si hubo
-desacuerdo entre motores. `explain()` reconstruye todo esto más la
-fiabilidad aprendida en el momento de la decisión. Esto responde
-directamente al vacío de "decision provenance" documentado en
-[arXiv:2602.22442](https://arxiv.org/html/2602.22442v1) y en el análisis de
-TianPan.co sobre "Decision Provenance in Agentic Systems"
+### 5. Auditability (`Decision`, `explain()`)
+
+Every decision records which engines were consulted and in what order,
+their raw and calibrated outputs, the threshold in force at that moment,
+and whether the engines disagreed. `explain()` reconstructs all of that
+plus the reliability learned at decision time. This answers directly the
+"decision provenance" gap documented in
+[arXiv:2602.22442](https://arxiv.org/html/2602.22442v1) and in TianPan.co's
+analysis of "Decision Provenance in Agentic Systems"
 ([tianpan.co](https://tianpan.co/blog/2026-04-19-decision-provenance-agentic-systems)),
-que concluye que "la respuesta para la mayoría de sistemas agénticos en
-producción hoy es no" cuando se pregunta si pueden reconstruir cadenas de
-decisión para rendir cuentas.
+which concludes that the answer for most agentic systems in production
+today is no, when asked whether they can reconstruct decision chains for
+accountability.
 
-## Por qué NO se implementó...
+## What was deliberately NOT implemented
 
-- **Reponderación de logits (estilo JitRL):** requiere acceso a los pesos o
-  logits del modelo. Rompe con LLMs vía API cerrada (OpenAI, Anthropic) y
-  con Jev vía HTTP. Se prefirió un mecanismo que funcione con cualquier
-  motor tratado como caja negra, al coste de ser menos preciso que
-  reponderar logits directamente.
-- **World models / razonamiento causal:** según la misma investigación
-  previa, sigue siendo investigación básica sin producto maduro (JEPA de
-  LeCun, AMI Labs, financiado con $1.03B pero "sin producto ni ingresos" a
-  fecha de esa investigación) — fuera de alcance de una librería que se
-  quiere usable hoy.
-- **Verificación formal (SMT solvers, Lean) como motor adicional:** dejado
-  como extensión del `Engine` protocol para quien lo necesite (ver
-  Roadmap en el README) — la investigación encontró aplicaciones
-  incipientes fuera de matemáticas/código (p.ej. razonamiento legal,
-  [arXiv:2511.21033](https://arxiv.org/abs/2511.21033)) pero ninguna en
-  decisiones clínicas o de negocio general, así que no se incluyó una
-  implementación concreta para no inventar un caso de uso no validado.
-- **Bucketing de contexto por embeddings:** el MVP bucketiza solo por
-  `task_type` explícito (declarado por quien llama) en vez de por
-  similitud semántica entre casos, para mantener cero dependencias de
-  modelos de embeddings. Es el principal punto de extensión documentado en
-  el Roadmap.
+- **Logit reweighting (JitRL style):** requires access to the model's
+  weights or logits. It breaks with LLMs behind closed APIs (OpenAI,
+  Anthropic) and with Jev over HTTP. A mechanism that works with any engine
+  treated as a black box was preferred, at the cost of being less precise
+  than reweighting logits directly.
+- **World models / causal reasoning:** per the same prior research, still
+  basic research without a mature product (LeCun's JEPA, AMI Labs, funded
+  with $1.03B but with no product and no revenue as of that research) —
+  out of scope for a library meant to be usable today.
+- **Formal verification (SMT solvers, Lean) as an additional engine:**
+  left as an extension of the `Engine` protocol for whoever needs it (see
+  the Roadmap in the README). The research found emerging applications
+  outside maths and code — legal reasoning, for instance,
+  [arXiv:2511.21033](https://arxiv.org/abs/2511.21033) — but none in
+  clinical or general business decisions, so no concrete implementation was
+  included rather than invent an unvalidated use case.
+- **Embedding-based context bucketing:** the MVP buckets only by explicit
+  `task_type` (declared by the caller) rather than by semantic similarity
+  between cases, to keep zero dependencies on embedding models. It is the
+  main documented extension point in the Roadmap.
 
-## Validación empírica
+## Empirical validation
 
-`examples/demo_synthetic.py` simula 800 decisiones con tres motores de
-fiabilidad y coste distintos (uno deliberadamente sobreconfiado en casos
-difíciles) y mide, por ventanas de 50 decisiones: precisión de la respuesta
-aceptada, número medio de motores consultados por decisión (proxy de
-coste), y error de calibración (|confianza calibrada − acierto real|). En
-una corrida de referencia con semilla fija, el error de calibración bajó de
-0.129 a 0.036 a lo largo de la corrida sin ninguna intervención manual,
-mientras la precisión se mantuvo estable y el número de motores consultados
-por decisión se mantuvo bajo (~1.1-1.2 de media, es decir, la cascada
-resuelve la mayoría de los casos con un solo motor).
+`examples/demo_synthetic.py` simulates 800 decisions across three engines
+of differing reliability and cost (one deliberately overconfident on hard
+cases) and measures, in windows of 50 decisions: accuracy of the accepted
+answer, mean number of engines consulted per decision (a cost proxy), and
+calibration error (|calibrated confidence − actual correctness|). In a
+reference run with a fixed seed, calibration error fell from 0.129 to 0.036
+over the run with no manual intervention, while accuracy stayed stable and
+the number of engines consulted per decision stayed low (~1.1-1.2 on
+average — that is, the cascade resolves most cases with a single engine).
 
-Esto es una prueba de que el mecanismo funciona como está diseñado sobre
-datos sintéticos — no una validación en producción ni sobre un dominio
-real. Ver la sección "Limitaciones honestas" del README.
+This is evidence that the mechanism behaves as designed on synthetic data
+— not a validation in production nor on a real domain. See the "Honest
+limitations" section of the README.

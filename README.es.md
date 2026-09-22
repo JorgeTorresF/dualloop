@@ -47,7 +47,7 @@ aproximación estocástica de paso constante) que funciona con **cualquier
 motor, incluidos APIs cerradas de caja negra** — no requiere acceso a
 logits ni a los pesos del modelo, a diferencia de JitRL. El detalle
 completo de las decisiones de diseño y sus fuentes está en
-[`docs/architecture.md`](docs/architecture.md).
+[`docs/architecture.es.md`](docs/architecture.es.md).
 
 ## ¿Te sirve esto?
 
@@ -195,7 +195,7 @@ loop = DualLoop(engines=engines, store=SQLiteStore("dualloop.db"))
    se consultaron, sus votos crudos y calibrados, el umbral usado, y la
    fiabilidad aprendida en ese momento.
 
-Ver [`docs/architecture.md`](docs/architecture.md) para el detalle
+Ver [`docs/architecture.es.md`](docs/architecture.es.md) para el detalle
 matemático y la justificación de cada elección de diseño.
 
 ## Abstención: cuando el sistema no sabe
