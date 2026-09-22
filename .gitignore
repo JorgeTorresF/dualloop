@@ -9,7 +9,7 @@ build/
 *.db
 .DS_Store
 
-# Bitacora interna de la sesion de Cowork: menciona detalles operativos
-# (recuperacion de cuenta, 2FA) que no deben ir a un repo publico.
+# Internal session handover note: mentions operational details that do not
+# belong in a public repository.
 CONTEXTO_SESION_DUALLOOP.md
 *.tar.gz
