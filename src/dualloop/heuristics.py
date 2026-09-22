@@ -1,14 +1,13 @@
-"""Inferencia opcional de outcomes a partir de señales indirectas.
+"""Optional inference of outcomes from indirect signals.
 
-`report_outcome()` explícito es la única vía verdaderamente generalizable
-de cerrar el bucle (nadie puede inventar un outcome que no se observó). Los
-heurísticos de este módulo son un mecanismo COMPLEMENTARIO, deshabilitado
-por defecto, para quien quiera exprimir señal adicional cuando reportar el
-outcome a mano no es práctico. Son inherentemente frágiles y específicos de
-dominio — literalmente el mismo tipo de "heurística indirecta" que la
-investigación descartó como generalizable para todo el mundo, así que se
-documentan aquí como ejemplo de referencia, no como recomendación por
-defecto.
+An explicit `report_outcome()` is the only genuinely generalisable way to
+close the loop: nobody can invent an outcome that was never observed. The
+heuristics in this module are a COMPLEMENTARY mechanism, disabled by
+default, for anyone who wants to squeeze extra signal out when reporting
+the outcome by hand is impractical. They are inherently fragile and
+domain-specific — literally the same kind of "indirect heuristic" the
+research dismissed as generalisable for everyone — so they are documented
+here as a worked example, not as a default recommendation.
 """
 
 from __future__ import annotations
@@ -25,13 +24,13 @@ class OutcomeHeuristic(Protocol):
 
 
 class HumanOverrideHeuristic:
-    """Ejemplo de referencia: si un humano corrige la decisión dentro de
-    `window_seconds`, se infiere que la decisión original fue incorrecta.
+    """Worked example: if a human overrides the decision within
+    `window_seconds`, infer that the original decision was wrong.
 
-    ADVERTENCIA: un override puede deberse a que cambió el contexto, no a
-    que la decisión estuviera mal. Úsalo solo si entiendes el patrón de
-    correcciones de tu propio dominio, y revisa periódicamente si está
-    sesgando la calibración con outcomes mal inferidos.
+    WARNING: an override may mean the context changed, not that the
+    decision was wrong. Use this only if you understand the correction
+    patterns of your own domain, and check periodically whether it is
+    skewing calibration with badly inferred outcomes.
     """
 
     name = "human_override"
@@ -48,6 +47,6 @@ class HumanOverrideHeuristic:
         return Outcome(
             decision_id=decision.id,
             correct=False,
-            note="Inferido: un humano corrigio la decision dentro de la ventana de override.",
+            note="Inferred: a human overrode the decision within the override window.",
             source=self.name,
         )

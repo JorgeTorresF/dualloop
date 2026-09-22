@@ -1,9 +1,9 @@
-"""Motor de razonamiento vía la API nativa de Anthropic (Messages API).
+"""Reasoning engine over Anthropic's native Messages API.
 
-Se ofrece como adaptador propio (en vez de forzar Anthropic a través del
-esquema OpenAI) porque su API no es compatible con chat completions de
-OpenAI. Comparte el mismo prompt/esquema que `llm_openai` para que ambos
-motores sean intercambiables desde el punto de vista del Arbiter.
+Offered as its own adapter, rather than forcing Anthropic through the
+OpenAI schema, because its API is not compatible with OpenAI chat
+completions. It shares the same prompt and schema as `llm_openai` so both
+engines are interchangeable from the Arbiter's point of view.
 """
 
 from __future__ import annotations
@@ -18,8 +18,8 @@ from .llm_openai import _build_prompt, _parse_llm_json
 
 
 class AnthropicLLMEngine(HttpClientOwner, BaseEngine):
-    """Motor 'System 2' vía Claude. relative_cost alto por defecto: va al
-    final de la cascada salvo que el bandit aprenda lo contrario."""
+    """A 'System 2' engine over Claude. High relative_cost by default: it
+    sits at the end of the cascade unless the bandit learns otherwise."""
 
     relative_cost = 5.0
 

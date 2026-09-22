@@ -1,12 +1,12 @@
-"""Backends de persistencia para decisiones, outcomes y estado de
-calibración/bandit/umbral.
+"""Persistence backends for decisions, outcomes and
+calibration/bandit/threshold state.
 
-`InMemoryStore` es el valor por defecto (cero configuración). `SQLiteStore`
-usa únicamente `sqlite3` de la librería estándar — sin dependencias
-externas — para que cualquiera pueda persistir el estado entre reinicios
-del proceso sin montar una base de datos aparte. Ambos implementan el mismo
-protocolo `Store`, así que se pueden sustituir por un backend propio
-(Postgres, Redis...) implementando los mismos métodos.
+`InMemoryStore` is the default (zero configuration). `SQLiteStore` uses
+only the standard library's `sqlite3` — no external dependencies — so that
+anyone can persist state across process restarts without standing up a
+separate database. Both implement the same `Store` protocol, so you can
+swap in your own backend (Postgres, Redis...) by implementing the same
+methods.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ class Store(Protocol):
 
 
 class InMemoryStore:
-    """Sin persistencia entre procesos — ideal para pruebas y demos."""
+    """No persistence across processes -- ideal for tests and demos."""
 
     def __init__(self) -> None:
         self._decisions: dict[str, Decision] = {}
@@ -72,7 +72,7 @@ def _decision_from_jsonable(data: dict) -> Decision:
 
 
 class SQLiteStore:
-    """Persistencia entre reinicios usando sqlite3 (stdlib, sin dependencias)."""
+    """Persistence across restarts using sqlite3 (stdlib, no dependencies)."""
 
     def __init__(self, path: str = "dualloop.db") -> None:
         self._path = path

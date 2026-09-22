@@ -1,13 +1,13 @@
-"""Tipos de datos centrales de DualLoop.
+"""DualLoop's core data types.
 
-El esquema de `Question` reutiliza deliberadamente el mismo contrato que usa
-simple-jev (https://github.com/featherless-ai/simple-jev) para sus preguntas
-choice/score/noul. Compartir un único esquema entre un LLM de razonamiento,
-un clasificador tipado y un motor de reglas es lo que permite compararlos
-como "peras con peras" en el árbitro — ningún framework de orquestación
-mainstream (LangGraph, CrewAI, AutoGen, Semantic Kernel) define hoy un
-contrato así entre motores heterogéneos; cada uno resuelve routing solo
-entre variantes de LLM.
+`Question` deliberately reuses the same contract simple-jev
+(https://github.com/featherless-ai/simple-jev) uses for its
+choice/score/noul questions. Sharing one schema across a reasoning LLM, a
+typed classifier and a rule engine is what makes them comparable
+like-for-like in the arbiter -- no mainstream orchestration framework
+(LangGraph, CrewAI, AutoGen, Semantic Kernel) defines such a contract
+across heterogeneous engines today; each solves routing only between LLM
+variants.
 """
 
 from __future__ import annotations
@@ -22,11 +22,11 @@ QuestionType = Literal["choice", "score", "noul"]
 
 @dataclass(frozen=True)
 class Question:
-    """Una pregunta de decisión, en el mismo esquema que simple-jev.
+    """A decision question, in the same schema as simple-jev.
 
-    - choice: elegir entre 2-50 opciones (`criteria` = {opcion: descripcion|None})
-    - score:  puntuar sobre una rúbrica de 2-50 niveles (`criteria` = {nivel: descripcion|None})
-    - noul:   juicio binario con grado de certeza (no requiere `criteria`)
+    - choice: pick one of 2-50 options (`criteria` = {option: description|None})
+    - score:  rate on a rubric of 2-50 levels (`criteria` = {level: description|None})
+    - noul:   binary judgment with a degree of certainty (no `criteria` needed)
     """
 
     type: QuestionType
@@ -37,14 +37,14 @@ class Question:
     def __post_init__(self) -> None:
         if self.type in ("choice", "score"):
             if not self.criteria:
-                raise ValueError(f"Question type={self.type!r} requiere 'criteria' no vacío")
+                raise ValueError(f"Question type={self.type!r} requires a non-empty 'criteria'")
             if self.type == "choice" and not (2 <= len(self.criteria) <= 50):
-                raise ValueError("choice requiere entre 2 y 50 opciones en 'criteria'")
+                raise ValueError("choice requires between 2 and 50 options in 'criteria'")
 
 
 @dataclass
 class EngineOutput:
-    """Salida cruda de un motor, antes de calibrar."""
+    """An engine's raw output, before calibration."""
 
     engine_name: str
     value: Any
@@ -60,7 +60,7 @@ class EngineOutput:
 
 @dataclass
 class Vote:
-    """Un EngineOutput ya calibrado: lo que el árbitro compara entre motores."""
+    """A calibrated EngineOutput: what the arbiter compares across engines."""
 
     engine_name: str
     value: Any
@@ -72,7 +72,7 @@ class Vote:
 
 @dataclass
 class Decision:
-    """Registro auditable completo de una decisión de arbitraje."""
+    """Complete auditable record of one arbitration decision."""
 
     id: str
     task_type: str
@@ -84,12 +84,12 @@ class Decision:
     escalation_threshold_used: float
     disagreement: bool
     abstained: bool = False
-    """True cuando ningun motor alcanzo el umbral y el loop se declara
-    incompetente para este caso (requiere `abstain_below_threshold=True`).
+    """True when no engine cleared the threshold and the loop declares
+    itself incompetent for this case (requires `abstain_below_threshold=True`).
 
-    `chosen_value` sigue trayendo el mejor voto disponible, para que quien
-    integra pueda mostrarselo a la persona que decide; pero una decision
-    con `abstained=True` NO debe ejecutarse sin revision humana."""
+    `chosen_value` still carries the best vote available, so the caller can
+    show it to whoever decides; but a decision with `abstained=True` must
+    NOT be executed without human review."""
     created_at: float = field(default_factory=time.time)
 
     @staticmethod
@@ -99,10 +99,11 @@ class Decision:
 
 @dataclass
 class Outcome:
-    """Lo que pasó de verdad, reportado después de la decisión.
+    """What actually happened, reported after the decision.
 
-    `correct=None` representa "no se pudo determinar" (resultado ambiguo o
-    parcial) y NO dispara recalibración; solo queda como nota de auditoría.
+    `correct=None` means "could not be determined" (an ambiguous or partial
+    result) and does NOT trigger recalibration; it is kept as an audit note
+    only.
     """
 
     decision_id: str

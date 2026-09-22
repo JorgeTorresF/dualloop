@@ -1,7 +1,7 @@
-"""Motor determinista basado en una función Python registrada por quien
-integra la librería. Útil como tercer brazo de la cascada (coste ~0,
-confianza fija cuando aplica) y para representar lógica de negocio que no
-se quiere delegar a un modelo probabilístico.
+"""Deterministic engine backed by a Python function supplied by whoever
+integrates the library. Useful as a third arm of the cascade (cost ~0,
+fixed confidence when it applies) and to express business logic you do not
+want to delegate to a probabilistic model.
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ RuleFn = Callable[[str, Question], Optional[tuple[Any, float]]]
 
 
 class RuleEngine(BaseEngine):
-    """`rule_fn(task_type, question)` debe devolver `(valor, confianza)` si
-    la regla cubre el caso, o `None` si no aplica (el Arbiter lo trata como
-    fallo de este motor y sigue escalando a los demás)."""
+    """`rule_fn(task_type, question)` must return `(value, confidence)` if
+    the rule covers the case, or `None` if it does not apply (the Arbiter
+    treats that as a failure of this engine and keeps escalating)."""
 
     relative_cost = 0.01
 
@@ -28,6 +28,6 @@ class RuleEngine(BaseEngine):
     def _decide_raw(self, task_type: str, question: Question) -> tuple[Any, float, dict]:
         result = self._rule_fn(task_type, question)
         if result is None:
-            raise ValueError("La regla no cubre este caso (sin match)")
+            raise ValueError("The rule does not cover this case (no match)")
         value, confidence = result
         return value, confidence, {"source": "rule"}

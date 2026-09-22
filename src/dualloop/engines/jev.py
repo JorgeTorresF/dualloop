@@ -1,14 +1,14 @@
-"""Cliente para un servidor simple-jev autoalojado.
+"""Client for a self-hosted simple-jev server.
 
-simple-jev (https://github.com/featherless-ai/simple-jev) convierte
-cualquier modelo abierto compatible con HF Transformers en un endpoint de
-clasificación estructurada, leyendo los logits del siguiente token para
-cada opción predefinida. Este motor SOLO habla el protocolo HTTP público
-del servidor (`POST /v1/classifier`) — no embebe ni redistribuye código de
-simple-jev, así que la licencia de este paquete (MIT) es independiente de
-la del servidor que se esté consultando (verifica la licencia de tu propio
-despliegue de simple-jev por separado; a fecha de esta investigación su
-repo tenía un issue abierto sobre falta de fichero LICENSE explícito).
+simple-jev (https://github.com/featherless-ai/simple-jev) turns any open
+HF-Transformers-compatible model into a structured classification
+endpoint, reading next-token logits for each predefined option. This
+engine speaks ONLY the server's public HTTP protocol
+(`POST /v1/classifier`); it embeds and redistributes none of simple-jev's
+code, so this package's licence (MIT) is independent of the licence of
+whatever server you point it at. Verify the licence of your own simple-jev
+deployment separately: at the time of this research its repository had an
+open issue about the absence of an explicit LICENSE file.
 """
 
 from __future__ import annotations
@@ -21,18 +21,18 @@ from ..types import Question
 from .base import BaseEngine, HttpClientOwner
 
 
-#: Clave con la que se envia la pregunta al servidor jev y con la que se
-#: lee su respuesta. Es un identificador interno del protocolo, no una
-#: etiqueta de dominio: antes se usaba el `task_type`, lo que acoplaba la
-#: nomenclatura de tus tareas a lo que el servidor acepte como clave (y
-#: rompia con un task_type que llevara caracteres inesperados). Se envia y
-#: se lee la misma constante, asi que es autoconsistente.
+#: The key under which the question is sent to the jev server and read
+#: back. It is an internal protocol identifier, not a domain label: this
+#: used to be the `task_type`, which coupled your task naming to whatever
+#: the server accepts as a key (and broke on a task_type carrying
+#: unexpected characters). The same constant is sent and read, so it is
+#: self-consistent.
 _QUESTION_KEY = "decision"
 
 
 class JevEngine(HttpClientOwner, BaseEngine):
-    """Motor 'System 1': rápido, barato, tipado. Pensado para ir primero en
-    la cascada de arbitraje (relative_cost bajo)."""
+    """A 'System 1' engine: fast, cheap, typed. Meant to go first in the
+    arbitration cascade (low relative_cost)."""
 
     relative_cost = 0.1
 
@@ -50,7 +50,7 @@ class JevEngine(HttpClientOwner, BaseEngine):
         self.model = model
         self.timeout = timeout
         self._client = client or httpx.Client(timeout=timeout)
-        # Solo cerramos el cliente si lo hemos creado nosotros.
+        # Only close the client if we were the ones who created it.
         self._owns_client = client is None
 
     def _decide_raw(self, task_type: str, question: Question) -> tuple[Any, float, dict]:
@@ -75,14 +75,14 @@ class JevEngine(HttpClientOwner, BaseEngine):
         if answer["type"] == "score":
             return answer["score"], float(answer["confidence"]), data
         if answer["type"] == "noul":
-            # NOTA: el formato exacto de la respuesta "noul" no aparecía
-            # documentado con un ejemplo explícito en el README público
-            # consultado (solo el de "choice" lo estaba). Este parseo es la
-            # mejor inferencia razonable a partir de la especificación
-            # ("juicio verdadero/falso, 0.01-0.99") — verifica contra el
-            # /docs de tu propio servidor antes de usar en producción y
-            # ajusta si el campo real no se llama "value"/"score".
+            # NOTE: the exact shape of a "noul" response was not
+            # documented with an explicit example in the public README
+            # consulted (only "choice" was). This parsing is the most
+            # reasonable inference from the specification ("true/false
+            # judgment, 0.01-0.99"). Check it against your own server's
+            # /docs before relying on it in production, and adjust if the
+            # real field is not called "value"/"score".
             p = float(answer.get("value", answer.get("score", 0.5)))
             return (p >= 0.5), max(p, 1 - p), data
 
-        raise ValueError(f"Tipo de respuesta Jev no reconocido: {answer['type']!r}")
+        raise ValueError(f"Unrecognised Jev response type: {answer['type']!r}")

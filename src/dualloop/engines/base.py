@@ -1,9 +1,9 @@
-"""Contrato base que cualquier motor de decisión debe cumplir.
+"""The base contract every decision engine must satisfy.
 
-Un "motor" puede ser un LLM de razonamiento, un clasificador tipado (Jev),
-un conjunto de reglas deterministas, o cualquier otra cosa que sepa
-responder una `Question`. Todos comparten la misma interfaz para que el
-Arbiter pueda tratarlos de forma intercambiable.
+An "engine" can be a reasoning LLM, a typed classifier (Jev), a set of
+deterministic rules, or anything else that knows how to answer a
+`Question`. They all share one interface so the Arbiter can treat them
+interchangeably.
 """
 
 from __future__ import annotations
@@ -16,15 +16,15 @@ from ..types import EngineOutput, Question
 
 
 class HttpClientOwner:
-    """Gestiona el ciclo de vida del cliente HTTP de un motor.
+    """Manages the lifecycle of an engine's HTTP client.
 
-    Un motor puede recibir un `httpx.Client` inyectado (para reutilizar
-    conexiones, fijar reintentos o testear) o crearse el suyo. Solo se
-    cierra **el que creó el motor**: el inyectado pertenece a quien lo
-    inyectó, y cerrarlo por nuestra cuenta romperia a cualquier otro que lo
-    comparta.
+    An engine can be handed an injected `httpx.Client` (to reuse
+    connections, configure retries, or for testing) or build its own. Only
+    **the one the engine created** is ever closed: an injected client
+    belongs to whoever injected it, and closing it here would break anyone
+    else sharing it.
 
-    Los motores que lo usan sirven como gestor de contexto::
+    Engines using this mixin work as context managers::
 
         with JevEngine(base_url=..., model=...) as jev:
             loop = DualLoop(engines=[jev])
@@ -32,7 +32,7 @@ class HttpClientOwner:
     """
 
     def close(self) -> None:
-        """Cierra el cliente HTTP si es nuestro. Idempotente."""
+        """Close the HTTP client if it is ours. Idempotent."""
         if getattr(self, "_owns_client", False):
             self._client.close()
             self._owns_client = False
@@ -46,19 +46,19 @@ class HttpClientOwner:
 
 
 class BaseEngine(ABC):
-    """Clase base: mide latencia y atrapa errores de forma uniforme.
+    """Base class: measures latency and catches errors uniformly.
 
-    Subclases solo implementan `_decide_raw`, que debe devolver
-    `(value, raw_confidence, raw_response_dict)` o lanzar una excepción si
-    el motor no puede responder (se traduce en un EngineOutput con `error`
-    en vez de propagar la excepción, para que el Arbiter pueda seguir
-    escalando a otros motores).
+    Subclasses only implement `_decide_raw`, which must return
+    `(value, raw_confidence, raw_response_dict)` or raise if the engine
+    cannot answer. A raised exception becomes an EngineOutput carrying
+    `error` rather than propagating, so the Arbiter can keep escalating to
+    other engines.
     """
 
     name: str = "engine"
-    #  Coste relativo indicativo (no es dinero real): úsalo para declarar
-    #  que un motor es "barato y rápido" (p.ej. 0.1) o "caro y lento"
-    #  (p.ej. 5.0). Solo afecta el orden de exploración en frío del bandit.
+    #  Indicative relative cost (not real money): use it to declare that
+    #  an engine is "cheap and fast" (say 0.1) or "expensive and slow"
+    #  (say 5.0). It only affects the bandit's cold-start exploration order.
     relative_cost: float = 1.0
 
     def decide(self, task_type: str, question: Question) -> EngineOutput:
@@ -67,11 +67,11 @@ class BaseEngine(ABC):
             value, confidence, raw = self._decide_raw(task_type, question)
             latency_ms = (time.monotonic() - t0) * 1000
             return EngineOutput(self.name, value, float(confidence), latency_ms, raw)
-        except Exception as exc:  # noqa: BLE001 - un motor no debe tumbar el arbitraje
+        except Exception as exc:  # noqa: BLE001 - one engine must not bring arbitration down
             latency_ms = (time.monotonic() - t0) * 1000
             return EngineOutput(self.name, None, 0.0, latency_ms, {}, error=str(exc))
 
     @abstractmethod
     def _decide_raw(self, task_type: str, question: Question) -> tuple[Any, float, dict]:
-        """Implementación concreta del motor. Debe lanzar excepción si no puede responder."""
+        """The engine's concrete implementation. Must raise if it cannot answer."""
         raise NotImplementedError

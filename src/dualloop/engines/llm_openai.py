@@ -1,14 +1,13 @@
-"""Motor de razonamiento vía cualquier API compatible con el esquema de
-chat completions de OpenAI: OpenAI, OpenRouter, Ollama, vLLM, LM Studio,
-Together, Groq, etc. Es deliberadamente genérico (no atado a un vendor)
-para que la pieza sea reutilizable por cualquiera, tal como se decidió al
-construir esta librería.
+"""Reasoning engine over any API compatible with OpenAI's chat
+completions schema: OpenAI, OpenRouter, Ollama, vLLM, LM Studio, Together,
+Groq and so on. It is deliberately vendor-agnostic so the piece stays
+reusable by anyone.
 
-Nota: `response_format: {"type": "json_object"}` no lo soportan todos los
-servidores OpenAI-compatibles de la misma forma (p.ej. Ollama usa
-`"format": "json"` en el nivel superior del payload, no dentro de
-`response_format`). Si tu servidor no soporta este campo, sobrescribe
-`_extra_payload()` en una subclase para adaptarlo.
+Note: `response_format: {"type": "json_object"}` is not supported the same
+way by every OpenAI-compatible server (Ollama, for instance, uses
+`"format": "json"` at the top level of the payload rather than inside
+`response_format`). If your server does not support this field, override
+`_extra_payload()` in a subclass to adapt it.
 """
 
 from __future__ import annotations
@@ -21,15 +20,15 @@ import httpx
 from ..types import Question
 from .base import BaseEngine, HttpClientOwner
 
-_PROMPT_TEMPLATE = """Eres un motor de decisión. Responde UNICAMENTE con un objeto JSON valido, sin texto adicional ni bloques de codigo.
+_PROMPT_TEMPLATE = """You are a decision engine. Reply with ONE valid JSON object and nothing else: no prose, no code fences.
 
-Contexto:
+Context:
 {state}
 
-Pregunta ({qtype}): {instructions}
+Question ({qtype}): {instructions}
 {criteria_block}
 
-Formato de respuesta requerido (solo el JSON, nada mas):
+Required response format (the JSON only, nothing else):
 {schema}
 """
 
@@ -37,12 +36,12 @@ Formato de respuesta requerido (solo el JSON, nada mas):
 def _schema_and_criteria(question: Question) -> tuple[str, str]:
     if question.type == "choice":
         opts = list(question.criteria.keys())  # type: ignore[union-attr]
-        criteria_block = "Opciones validas: " + ", ".join(opts)
-        schema = '{"choice": "<una de las opciones>", "confidence": <float 0-1>}'
+        criteria_block = "Valid options: " + ", ".join(opts)
+        schema = '{"choice": "<one of the options>", "confidence": <float 0-1>}'
     elif question.type == "score":
         levels = list(question.criteria.keys())  # type: ignore[union-attr]
-        criteria_block = "Niveles validos: " + ", ".join(str(lv) for lv in levels)
-        schema = '{"score": "<uno de los niveles>", "confidence": <float 0-1>}'
+        criteria_block = "Valid levels: " + ", ".join(str(lv) for lv in levels)
+        schema = '{"score": "<one of the levels>", "confidence": <float 0-1>}'
     else:  # noul
         criteria_block = ""
         schema = '{"value": <true|false>, "confidence": <float 0-1>}'
@@ -52,7 +51,7 @@ def _schema_and_criteria(question: Question) -> tuple[str, str]:
 def _build_prompt(question: Question) -> str:
     schema, criteria_block = _schema_and_criteria(question)
     return _PROMPT_TEMPLATE.format(
-        state=question.state or "(sin contexto adicional)",
+        state=question.state or "(no additional context)",
         qtype=question.type,
         instructions=question.instructions,
         criteria_block=criteria_block,
@@ -72,8 +71,8 @@ def _parse_llm_json(content: str) -> dict:
 
 
 class OpenAICompatibleLLMEngine(HttpClientOwner, BaseEngine):
-    """Motor 'System 2': lento, caro, generalista. Va al final de la
-    cascada por defecto (relative_cost alto)."""
+    """A 'System 2' engine: slow, expensive, general-purpose. Sits at the
+    end of the cascade by default (high relative_cost)."""
 
     relative_cost = 5.0
 
@@ -95,7 +94,7 @@ class OpenAICompatibleLLMEngine(HttpClientOwner, BaseEngine):
         self.extra_body = extra_body or {"response_format": {"type": "json_object"}}
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._client = client or httpx.Client(timeout=timeout, headers=headers)
-        # Solo cerramos el cliente si lo hemos creado nosotros.
+        # Only close the client if we were the ones who created it.
         self._owns_client = client is None
 
     def _decide_raw(self, task_type: str, question: Question) -> tuple[Any, float, dict]:

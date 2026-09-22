@@ -1,8 +1,8 @@
-"""DualLoop: arbitraje aprendido y auditable entre motores de decision
-heterogeneos (LLM + clasificadores tipados + reglas), con cierre del bucle
-decision -> resultado -> recalibracion sin reentrenamiento manual.
+"""DualLoop: learned, auditable arbitration between heterogeneous decision
+engines (LLMs + typed classifiers + rules), closing the loop
+decision -> outcome -> recalibration with no manual retraining.
 
-Ver README.md y docs/architecture.md para el porque de este diseño.
+See README.md and docs/architecture.md for the reasoning behind this design.
 """
 
 from .bandit import AdaptiveThreshold, ReliabilityBandit
