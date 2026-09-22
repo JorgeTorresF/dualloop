@@ -1,16 +1,16 @@
-"""Abstencion: que pasa cuando ningun motor alcanza el umbral.
+"""Abstention: what happens when no engine clears the threshold.
 
-Sin `abstain_below_threshold` el loop acepta igualmente el mejor voto, por
-debajo del umbral: el umbral queda registrado pero no actua como suelo.
-Para un gate donde la respuesta correcta puede ser "no se, que lo mire una
-persona", eso es justo lo que no se quiere.
+Without `abstain_below_threshold` the loop accepts the best vote anyway,
+below the threshold: the threshold is recorded but never acts as a floor.
+For a gate where "I don't know, let a person look at it" is a legitimate
+answer, that is exactly what you do not want.
 """
 
 from dualloop import DualLoop, InMemoryStore, Question
 from dualloop.engines.base import BaseEngine
 
 QUESTION = Question(
-    type="choice", instructions="elige", state="ctx",
+    type="choice", instructions="pick one", state="ctx",
     criteria={"A": None, "B": None},
 )
 
@@ -39,45 +39,45 @@ def _loop(abstain: bool, confidence: float = 0.3, threshold: float = 0.9):
     )
 
 
-def test_por_defecto_no_se_abstiene_y_decide_igualmente():
+def test_by_default_it_does_not_abstain_and_decides_anyway():
     decision = _loop(abstain=False).decide("t", QUESTION)
     assert decision.abstained is False
     assert decision.chosen_confidence < decision.escalation_threshold_used
-    assert decision.chosen_value in ("A", "B"), "sigue decidiendo, comportamiento previo"
+    assert decision.chosen_value in ("A", "B"), "still decides: previous behaviour"
 
 
-def test_se_abstiene_cuando_nadie_alcanza_el_umbral():
+def test_it_abstains_when_nobody_clears_the_threshold():
     decision = _loop(abstain=True).decide("t", QUESTION)
     assert decision.abstained is True
     assert decision.chosen_confidence < decision.escalation_threshold_used
-    assert decision.chosen_value in ("A", "B"), "el mejor voto sigue disponible para el humano"
+    assert decision.chosen_value in ("A", "B"), "the best vote stays available to the human"
 
 
-def test_no_se_abstiene_si_alguien_supera_el_umbral():
+def test_it_does_not_abstain_when_someone_clears_the_threshold():
     decision = _loop(abstain=True, confidence=0.95, threshold=0.7).decide("t", QUESTION)
     assert decision.abstained is False
 
 
-def test_una_abstencion_no_mueve_el_umbral_pero_si_el_bandit():
-    # El umbral persigue la tasa de error de lo ACEPTADO. Si el sistema se
-    # abstuvo, ese caso no fue aceptado y no debe endurecer el umbral.
+def test_an_abstention_does_not_move_the_threshold_but_does_move_the_bandit():
+    # The threshold targets the error rate among ACCEPTED answers. If the
+    # system abstained, that case was not accepted and must not tighten it.
     loop = _loop(abstain=True)
-    antes = loop._threshold.get("t")
+    before = loop._threshold.get("t")
 
     decision = loop.decide("t", QUESTION)
     assert decision.abstained is True
     loop.report_outcome(decision.id, correct=False)
 
-    assert loop._threshold.get("t") == antes, "una abstencion no mueve el umbral"
-    assert loop._bandit.mean("t", decision.chosen_engine) < 1.0, "el bandit si aprende"
+    assert loop._threshold.get("t") == before, "an abstention must not move the threshold"
+    assert loop._bandit.mean("t", decision.chosen_engine) < 1.0, "the bandit does learn"
 
 
-def test_sin_abstencion_el_mismo_fallo_si_endurece_el_umbral():
-    # Control: mismo escenario con la abstencion apagada.
+def test_without_abstention_the_same_failure_does_tighten_the_threshold():
+    # Control: same scenario with abstention switched off.
     loop = _loop(abstain=False)
-    antes = loop._threshold.get("t")
+    before = loop._threshold.get("t")
 
     decision = loop.decide("t", QUESTION)
     loop.report_outcome(decision.id, correct=False)
 
-    assert loop._threshold.get("t") > antes, "un fallo aceptado si endurece el umbral"
+    assert loop._threshold.get("t") > before, "an accepted failure does tighten the threshold"

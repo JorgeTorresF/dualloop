@@ -15,24 +15,24 @@ class FixedEngine(BaseEngine):
 
     def _decide_raw(self, task_type, question):
         if self._fail:
-            raise ValueError("motor no disponible")
+            raise ValueError("engine unavailable")
         return self._value, self._confidence, {}
 
 
 def make_arbiter(engines, threshold_default=0.7, max_engines=None, seed=0):
-    # `seed` fijo a proposito: el orden de consulta lo decide Thompson
-    # sampling, que es aleatorio. Sin semilla estos tests son inestables
-    # (fallaban ~30% de las ejecuciones) porque a veces se consultaba
-    # primero el motor caro. El orden lo prueba test_bandit.py; aqui lo
-    # que se prueba es el arbitraje dado un orden.
+    # Fixed `seed` on purpose: consultation order is decided by Thompson
+    # sampling, which is random. Without a seed these tests are flaky --
+    # they failed ~30% of runs -- because the expensive engine was
+    # sometimes consulted first. Ordering is tested in test_bandit.py;
+    # what is tested here is arbitration given an order.
     engines_by_name = {e.name: e for e in engines}
     calibrators = {}
     bandit = ReliabilityBandit(
         cost_by_engine={e.name: e.relative_cost for e in engines}, seed=seed
     )
-    # Sin suelo: estos tests fijan umbrales bajos a proposito para
-    # controlar cuando escala la cascada. El suelo por defecto (0.8) es
-    # politica y aqui se prueba mecanica de arbitraje.
+    # No floor: these tests set low thresholds deliberately, to control
+    # when the cascade escalates. The default floor (0.8) is policy, and
+    # what is exercised here is arbitration mechanics.
     threshold = AdaptiveThreshold(default=threshold_default, lo=0.0)
     return Arbiter(engines_by_name, calibrators, bandit, threshold, max_engines_per_decision=max_engines)
 
@@ -47,7 +47,7 @@ def test_accepts_cheap_engine_when_confident_enough():
 
     result = arbiter.decide("t", QUESTION)
     assert result.decision.chosen_engine == "cheap"
-    assert len(result.consulted_engines) == 1  # no escalo
+    assert len(result.consulted_engines) == 1  # did not escalate
 
 
 def test_escalates_when_cheap_engine_not_confident():
@@ -85,6 +85,6 @@ def test_raises_when_all_engines_fail():
 
     try:
         arbiter.decide("t", QUESTION)
-        assert False, "se esperaba RuntimeError"
+        assert False, "expected RuntimeError"
     except RuntimeError:
         pass

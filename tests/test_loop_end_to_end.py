@@ -6,8 +6,8 @@ from dualloop.engines.base import BaseEngine
 
 
 class TogglableEngine(BaseEngine):
-    """Motor de prueba cuyo acierto se puede fijar desde fuera para
-    simular una serie controlada de outcomes."""
+    """Test engine whose correctness can be set from outside, to simulate
+    a controlled series of outcomes."""
 
     def __init__(self, name: str, cost: float = 1.0):
         self.name = name
@@ -44,22 +44,22 @@ def test_recalibration_shifts_confidence_after_many_wrong_outcomes():
     engine = TogglableEngine("only")
     loop = DualLoop(engines=[engine], store=InMemoryStore(), default_threshold=0.99)
 
-    # el motor siempre dice 0.8 de confianza pero se equivoca sistematicamente
+    # The engine always reports 0.8 confidence but is systematically wrong.
     engine.next_correct = False
     for _ in range(60):
         decision = loop.decide("t", QUESTION)
         loop.report_outcome(decision.id, correct=False)
 
     calibrated_conf = loop.explain(decision.id)["decision"].chosen_confidence
-    assert calibrated_conf < 0.5, f"la confianza calibrada deberia haber bajado, obtuve {calibrated_conf}"
+    assert calibrated_conf < 0.5, f"calibrated confidence should have dropped, got {calibrated_conf}"
 
 
 def test_missing_decision_raises_keyerror():
     engine = TogglableEngine("only")
     loop = DualLoop(engines=[engine])
     try:
-        loop.report_outcome("no-existe", correct=True)
-        assert False, "se esperaba KeyError"
+        loop.report_outcome("does-not-exist", correct=True)
+        assert False, "expected KeyError"
     except KeyError:
         pass
 
@@ -77,12 +77,12 @@ def test_sqlite_store_persists_state_across_instances():
             loop1.report_outcome(decision.id, correct=False)
         conf_before_reload = loop1.explain(decision.id)["decision"].chosen_confidence
 
-        # nueva instancia, mismo fichero: el estado de calibracion/bandit
-        # debe recuperarse sin volver a observar nada
+        # New instance, same file: calibration and bandit state must come
+        # back without observing anything again.
         engine2 = TogglableEngine("only")
         loop2 = DualLoop(engines=[engine2], store=SQLiteStore(db_path), default_threshold=0.99)
         new_decision = loop2.decide("t", QUESTION)
-        # como el motor sigue "equivocandose" con confianza 0.8, la
-        # confianza calibrada en la nueva instancia debe seguir siendo baja
+        # Since the engine keeps being wrong at 0.8 confidence, the
+        # calibrated confidence in the new instance must stay low.
         assert new_decision.chosen_confidence < 0.5
         assert conf_before_reload < 0.5

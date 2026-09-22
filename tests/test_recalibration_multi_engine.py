@@ -1,11 +1,11 @@
-"""Recalibracion con VARIOS motores que discrepan.
+"""Recalibration with SEVERAL engines that disagree.
 
-Este fichero cubre deliberadamente la costura entre las dos mitades de la
-suite: `test_arbiter.py` prueba el arbitraje multi-motor pero no recalibra,
-y `test_loop_end_to_end.py` recalibra pero con un solo motor. Sin un
-segundo motor no existe discrepante, asi que el caso mas delicado
--que pasa con quien discrepo cuando la decision elegida fallo- no lo
-observaba ningun test.
+This file deliberately covers the seam between the two halves of the
+suite: `test_arbiter.py` exercises multi-engine arbitration but never
+recalibrates, and `test_loop_end_to_end.py` recalibrates but with a single
+engine. Without a second engine there is no dissenter, so the most delicate
+case -- what happens to the engine that dissented when the chosen answer
+turned out wrong -- was observed by no test at all.
 """
 
 from dualloop import DualLoop, InMemoryStore, Question
@@ -14,12 +14,12 @@ from dualloop.types import Decision, Vote
 
 RAW = 0.8
 
-BINARIA = Question(
-    type="choice", instructions="elige", state="ctx",
+BINARY = Question(
+    type="choice", instructions="pick one", state="ctx",
     criteria={"A": None, "B": None},
 )
-TERNARIA = Question(
-    type="choice", instructions="elige", state="ctx",
+TERNARY = Question(
+    type="choice", instructions="pick one", state="ctx",
     criteria={"A": None, "B": None, "C": None},
 )
 
@@ -34,10 +34,10 @@ class FixedEngine(BaseEngine):
         return self._value, RAW, {}
 
 
-def _loop_con_decision(question, chosen_value, other_value):
-    """Construye un DualLoop y una Decision ya tomada con dos votos."""
+def _loop_with_decision(question, chosen_value, other_value):
+    """Build a DualLoop plus an already-made Decision carrying two votes."""
     loop = DualLoop(
-        engines=[FixedEngine("elegido", chosen_value), FixedEngine("otro", other_value)],
+        engines=[FixedEngine("chosen", chosen_value), FixedEngine("other", other_value)],
         store=InMemoryStore(),
     )
     decision = Decision(
@@ -45,10 +45,10 @@ def _loop_con_decision(question, chosen_value, other_value):
         task_type="t",
         question=question,
         votes=[
-            Vote("elegido", chosen_value, RAW, RAW, 1.0, {}),
-            Vote("otro", other_value, RAW, RAW, 1.0, {}),
+            Vote("chosen", chosen_value, RAW, RAW, 1.0, {}),
+            Vote("other", other_value, RAW, RAW, 1.0, {}),
         ],
-        chosen_engine="elegido",
+        chosen_engine="chosen",
         chosen_value=chosen_value,
         chosen_confidence=RAW,
         escalation_threshold_used=0.7,
@@ -58,9 +58,9 @@ def _loop_con_decision(question, chosen_value, other_value):
     return loop, decision
 
 
-def _bin_de(loop, engine_name):
-    """(alpha, beta) del bin que corresponde a RAW para ese motor, o None
-    si el motor no tiene calibrador (no se actualizo nada)."""
+def _bin_of(loop, engine_name):
+    """(alpha, beta) of the bin matching RAW for that engine, or None if the
+    engine has no calibrator at all -- meaning nothing was updated."""
     calibrator = loop._calibrators.get(("t", engine_name))
     if calibrator is None:
         return None
@@ -68,46 +68,47 @@ def _bin_de(loop, engine_name):
     return (b.alpha, b.beta)
 
 
-def test_discrepante_acierta_cuando_la_elegida_falla_en_binaria():
-    # Con dos opciones, si la elegida fallo la otra era la buena: el motor
-    # que discrepo acerto, y castigarlo sesgaria el sistema al consenso.
-    loop, decision = _loop_con_decision(BINARIA, "A", "B")
+def test_dissenter_is_right_when_the_chosen_answer_fails_on_a_binary():
+    # With two options, if the chosen answer was wrong the other one was
+    # right: the engine that dissented was correct, and punishing it would
+    # bias the whole system towards consensus.
+    loop, decision = _loop_with_decision(BINARY, "A", "B")
     loop.report_outcome(decision.id, correct=False)
 
-    assert _bin_de(loop, "elegido") == (1.0, 2.0), "el elegido fallo"
-    assert _bin_de(loop, "otro") == (2.0, 1.0), "el discrepante acerto"
+    assert _bin_of(loop, "chosen") == (1.0, 2.0), "the chosen engine was wrong"
+    assert _bin_of(loop, "other") == (2.0, 1.0), "the dissenter was right"
 
 
-def test_discrepante_no_se_actualiza_con_mas_de_dos_opciones():
-    # Con tres opciones, saber que 'A' era falsa no dice que 'B' fuera la
-    # buena: la verdad del discrepante es desconocida y no se inventa.
-    loop, decision = _loop_con_decision(TERNARIA, "A", "B")
+def test_dissenter_is_not_updated_with_more_than_two_options():
+    # With three options, knowing that 'A' was false does not tell us 'B'
+    # was true: the dissenter's truth is unknown and must not be invented.
+    loop, decision = _loop_with_decision(TERNARY, "A", "B")
     loop.report_outcome(decision.id, correct=False)
 
-    assert _bin_de(loop, "elegido") == (1.0, 2.0), "el elegido fallo"
-    assert _bin_de(loop, "otro") is None, "la verdad del discrepante es desconocida"
+    assert _bin_of(loop, "chosen") == (1.0, 2.0), "the chosen engine was wrong"
+    assert _bin_of(loop, "other") is None, "the dissenter's truth is unknown"
 
 
-def test_discrepante_falla_cuando_la_elegida_acierta():
-    loop, decision = _loop_con_decision(BINARIA, "A", "B")
+def test_dissenter_is_wrong_when_the_chosen_answer_is_right():
+    loop, decision = _loop_with_decision(BINARY, "A", "B")
     loop.report_outcome(decision.id, correct=True)
 
-    assert _bin_de(loop, "elegido") == (2.0, 1.0)
-    assert _bin_de(loop, "otro") == (1.0, 2.0), "discrepar de un acierto es fallar"
+    assert _bin_of(loop, "chosen") == (2.0, 1.0)
+    assert _bin_of(loop, "other") == (1.0, 2.0), "dissenting from a right answer is being wrong"
 
 
-def test_quien_coincide_comparte_el_destino_de_la_elegida():
-    loop, decision = _loop_con_decision(BINARIA, "A", "A")
+def test_an_agreeing_engine_shares_the_chosen_answers_fate():
+    loop, decision = _loop_with_decision(BINARY, "A", "A")
     loop.report_outcome(decision.id, correct=False)
 
-    assert _bin_de(loop, "elegido") == (1.0, 2.0)
-    assert _bin_de(loop, "otro") == (1.0, 2.0), "coincidir con un fallo es fallar"
+    assert _bin_of(loop, "chosen") == (1.0, 2.0)
+    assert _bin_of(loop, "other") == (1.0, 2.0), "agreeing with a wrong answer is being wrong"
 
 
-def test_per_engine_correct_tiene_prioridad_sobre_la_inferencia():
-    # Con tres opciones la inferencia se abstiene, pero si el llamante
-    # aporta la verdad por motor, esa manda.
-    loop, decision = _loop_con_decision(TERNARIA, "A", "B")
-    loop.report_outcome(decision.id, correct=False, per_engine_correct={"otro": True})
+def test_per_engine_correct_takes_precedence_over_inference():
+    # With three options the inference abstains, but if the caller supplies
+    # the per-engine truth, that wins.
+    loop, decision = _loop_with_decision(TERNARY, "A", "B")
+    loop.report_outcome(decision.id, correct=False, per_engine_correct={"other": True})
 
-    assert _bin_de(loop, "otro") == (2.0, 1.0), "la verdad explicita manda"
+    assert _bin_of(loop, "other") == (2.0, 1.0), "explicit truth wins"

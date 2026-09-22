@@ -3,8 +3,8 @@ from dualloop.bandit import AdaptiveThreshold, ReliabilityBandit
 
 def test_cheap_engine_biased_first_in_cold_start():
     bandit = ReliabilityBandit(cost_by_engine={"cheap": 0.1, "expensive": 5.0}, seed=42)
-    # sin ninguna observacion, en agregado sobre muchos samples el barato
-    # deberia salir primero con mucha mas frecuencia que el caro
+    # With no observations at all, aggregated over many samples the cheap
+    # engine should come first far more often than the expensive one.
     first_counts = {"cheap": 0, "expensive": 0}
     for _ in range(200):
         order = bandit.rank("t", ["cheap", "expensive"])
@@ -32,9 +32,9 @@ def test_bandit_state_roundtrip():
 
 
 def test_adaptive_threshold_rises_on_errors_and_falls_on_success():
-    # `lo` explicito: este test prueba la MECANICA del ajuste (sube con
-    # fallos, baja con aciertos), no la politica. Con el suelo por defecto
-    # (0.8) un arranque en 0.7 quedaria recortado y no podria bajar.
+    # Explicit `lo`: this test exercises the MECHANICS of the adjustment
+    # (rises on errors, falls on successes), not the policy. Under the
+    # default floor (0.8) a start at 0.7 would be clamped and could not fall.
     threshold = AdaptiveThreshold(default=0.7, lr=0.1, target_error_rate=0.05, lo=0.5)
     base = threshold.get("t")
     threshold.update_on_accepted_outcome("t", correct=False)
@@ -52,10 +52,10 @@ def test_adaptive_threshold_respects_bounds():
     assert threshold.get("t") <= 0.97
 
 
-def test_el_suelo_recorta_un_default_mas_bajo():
-    # Pedir un arranque por debajo del suelo no es un error del llamante:
-    # el suelo es politica y recorta. Lo contrario daria un umbral inicial
-    # al que ninguna actualizacion posterior podria volver.
+def test_the_floor_clamps_a_lower_default():
+    # Asking for a start below the floor is not a caller error: the floor
+    # is policy and it clamps. Otherwise you would get an initial threshold
+    # that no later update could ever return to.
     threshold = AdaptiveThreshold(default=0.5, lo=0.8)
     assert threshold.get("t") == 0.8
 
@@ -63,13 +63,13 @@ def test_el_suelo_recorta_un_default_mas_bajo():
     assert threshold_alto.get("t") == 0.97
 
 
-def test_suelo_por_defecto_es_08():
-    # Con motores mejores que target_error_rate el umbral baja hasta
-    # pegarse al suelo, asi que `lo` es quien decide de verdad que se
-    # acepta. 0.8 y no 0.5: aceptar con un 50% de confianza calibrada
-    # rara vez es lo que se quiere.
+def test_default_floor_is_08():
+    # With engines better than target_error_rate the threshold falls until
+    # it rests on the floor, so `lo` is what really decides what gets
+    # accepted. 0.8 and not 0.5: accepting at 50% calibrated confidence is
+    # rarely what anyone wants.
     threshold = AdaptiveThreshold()
     assert threshold.lo == 0.8
     for _ in range(500):
         threshold.update_on_accepted_outcome("t", correct=True)
-    assert threshold.get("t") == 0.8, "baja hasta el suelo y se queda ahi"
+    assert threshold.get("t") == 0.8, "falls to the floor and stays there"

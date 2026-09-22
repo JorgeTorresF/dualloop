@@ -8,7 +8,7 @@ def test_cold_start_returns_close_to_raw():
 
 def test_calibration_corrects_overconfidence_with_evidence():
     calib = ConfidenceCalibrator(cold_start_n=5.0)
-    # el motor reporta 0.9 de confianza pero se equivoca sistematicamente
+    # The engine reports 0.9 confidence but is systematically wrong.
     for _ in range(50):
         calib.update(0.9, correct=False)
     calibrated = calib.calibrate(0.9)
