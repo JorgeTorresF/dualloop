@@ -1,5 +1,8 @@
 # DualLoop
 
+[![CI](https://github.com/JorgeTorresF/dualloop/actions/workflows/ci.yml/badge.svg)](https://github.com/JorgeTorresF/dualloop/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Learned, auditable arbitration between heterogeneous decision engines (a
 reasoning LLM, a typed classifier such as
 [Jev/simple-jev](https://github.com/featherless-ai/simple-jev),

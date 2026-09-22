@@ -1,5 +1,8 @@
 # DualLoop
 
+[![CI](https://github.com/JorgeTorresF/dualloop/actions/workflows/ci.yml/badge.svg)](https://github.com/JorgeTorresF/dualloop/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 *Read this README [in English](README.md) — that is the canonical version.*
 
 Arbitraje aprendido y auditable entre motores de decisión heterogéneos
