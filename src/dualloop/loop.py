@@ -1,12 +1,11 @@
-"""Punto de entrada único de la librería.
+"""The library's single entry point.
 
-`DualLoop` combina motores heterogéneos (LLM razonador, clasificador
-tipado tipo Jev, reglas...) bajo un árbitro aprendido y auditable, y cierra
-el bucle decisión -> resultado -> recalibración a través de
-`report_outcome()`, sin reentrenar ningún modelo: cada llamada actualiza
-tres estadísticos online (calibración por motor, fiabilidad por motor,
-umbral de aceptación por tipo de tarea) con una actualización bayesiana
-cerrada en O(1).
+`DualLoop` combines heterogeneous engines (a reasoning LLM, a Jev-style
+typed classifier, rules...) under a learned, auditable arbiter, and closes
+the loop decision -> outcome -> recalibration through `report_outcome()`,
+retraining no model at all: each call updates three online statistics
+(per-engine calibration, per-engine reliability, per-task-type acceptance
+threshold) with a closed-form Bayesian update in O(1).
 """
 
 from __future__ import annotations
@@ -37,21 +36,22 @@ class DualLoop:
         abstain_below_threshold: bool = False,
     ) -> None:
         if not engines:
-            raise ValueError("DualLoop necesita al menos un motor")
+            raise ValueError("DualLoop needs at least one engine")
 
         self.store = store or InMemoryStore()
         by_name = {e.name: e for e in engines}
         if len(by_name) != len(engines):
-            raise ValueError("Los nombres de los motores deben ser unicos")
-        # orden inicial por coste ascendente: informa el prior optimista
-        # del bandit (ver ReliabilityBandit), no determina el resultado
+            raise ValueError("Engine names must be unique")
+        # Initial order by ascending cost: it informs the bandit's
+        # optimistic prior (see ReliabilityBandit), it does not decide the
+        # outcome.
         self._engines_by_name = dict(sorted(by_name.items(), key=lambda kv: kv[1].relative_cost))
 
         self._calibrators: dict[tuple[str, str], ConfidenceCalibrator] = {}
         cost_by_engine = {name: e.relative_cost for name, e in self._engines_by_name.items()}
         self._bandit = ReliabilityBandit(cost_by_engine=cost_by_engine, seed=seed)
-        # lo/hi solo se pasan si el llamante los fija, para no duplicar
-        # aqui los valores por defecto de AdaptiveThreshold.
+        # lo/hi are only forwarded when the caller sets them, so that
+        # AdaptiveThreshold's defaults are not duplicated here.
         bounds = {}
         if threshold_lo is not None:
             bounds["lo"] = threshold_lo
@@ -92,20 +92,20 @@ class DualLoop:
         source: str = "explicit",
         per_engine_correct: Optional[dict[str, bool]] = None,
     ) -> Outcome:
-        """Reporta lo que pasó de verdad tras una decisión.
+        """Report what actually happened after a decision.
 
-        `correct=None` registra el outcome como auditoría sin recalibrar
-        (resultado ambiguo o aún desconocido). `per_engine_correct` permite
-        dar la verdad por motor cuando se conoce (p.ej. en un set de
-        evaluación offline) para una recalibración más precisa que la
-        inferencia por defecto, que solo tiene certeza sobre el motor
-        elegido y sobre los que coincidieron con él; ver
-        `_infer_vote_correct`, que deja sin actualizar los votos cuya
-        verdad no se puede deducir.
+        `correct=None` records the outcome as an audit note without
+        recalibrating (an ambiguous or still-unknown result).
+        `per_engine_correct` lets you supply the truth per engine when you
+        know it -- from an offline evaluation set, say -- for a sharper
+        recalibration than the default inference, which is only certain
+        about the chosen engine and those that agreed with it. See
+        `_infer_vote_correct`, which leaves un-updated any vote whose truth
+        cannot be deduced.
         """
         decision = self.store.get_decision(decision_id)
         if decision is None:
-            raise KeyError(f"No existe una decision con id={decision_id!r}")
+            raise KeyError(f"No decision exists with id={decision_id!r}")
 
         outcome = Outcome(
             decision_id=decision_id,
@@ -123,12 +123,12 @@ class DualLoop:
         return outcome
 
     def try_infer_outcomes(self, decision_id: str, context: dict) -> list[Outcome]:
-        """Ejecuta los heuristicos opcionales registrados sobre una
-        decision. No se llama automaticamente: quien integra la libreria
-        decide cuando invocarlo."""
+        """Run the optional registered heuristics against a decision. It
+        is never called automatically: whoever integrates the library
+        decides when to invoke it."""
         decision = self.store.get_decision(decision_id)
         if decision is None:
-            raise KeyError(f"No existe una decision con id={decision_id!r}")
+            raise KeyError(f"No decision exists with id={decision_id!r}")
 
         inferred: list[Outcome] = []
         for heuristic in self._heuristics:
@@ -144,25 +144,26 @@ class DualLoop:
     def _infer_vote_correct(
         decision: Decision, vote: Vote, correct: bool
     ) -> Optional[bool]:
-        """Infiere si un voto acerto, a partir del outcome de la elegida.
+        """Infer whether a vote was right, from the chosen answer's outcome.
 
-        El motor elegido recibe la senal exacta. Para los demas:
+        The chosen engine gets the exact signal. For the others:
 
-        - si la elegida acerto, quien discrepo fallo;
-        - si la elegida fallo, quien coincidio fallo;
-        - si la elegida fallo y el motor discrepo, depende de cuantas
-          respuestas posibles habia. Con dos (``choice`` binario o
-          ``noul``) el discrepante acerto necesariamente. Con mas de dos,
-          saber que la elegida era falsa NO identifica cual era la buena.
+        - if the chosen answer was right, whoever dissented was wrong;
+        - if the chosen answer was wrong, whoever agreed was wrong;
+        - if the chosen answer was wrong and the engine dissented, it
+          depends on how many possible answers there were. With two (a
+          binary ``choice`` or a ``noul``) the dissenter was necessarily
+          right. With more than two, knowing the chosen answer was false
+          does NOT identify which one was true.
 
-        Devuelve ``None`` cuando la verdad del voto es desconocida; el
-        llamante no actualiza nada en ese caso. Es deliberadamente
-        conservador: alimentar al calibrador con una etiqueta inventada
-        sesga el sistema hacia el consenso, que es exactamente lo que un
-        arbitro entre motores heterogeneos no debe hacer. Si prefieres mas
-        senal a cambio de suponer uniformidad entre las opciones
-        restantes, esta es la unica linea que hay que cambiar (por ejemplo
-        devolviendo una actualizacion ponderada por 1/(n_options - 1)).
+        Returns ``None`` when the vote's truth is unknown; the caller then
+        updates nothing. This is deliberately conservative: feeding the
+        calibrator an invented label biases the system towards consensus,
+        which is precisely what an arbiter across heterogeneous engines
+        must not do. If you would rather have more signal at the price of
+        assuming uniformity across the remaining options, this is the only
+        line to change -- for instance by returning an update weighted by
+        1/(n_options - 1).
         """
         if vote.engine_name == decision.chosen_engine:
             return correct
@@ -202,21 +203,22 @@ class DualLoop:
 
         if correct is not None:
             self._bandit.update(decision.task_type, decision.chosen_engine, correct)
-            # El umbral persigue la tasa de error de lo ACEPTADO. Una
-            # decision en la que el loop se abstuvo no fue aceptada, asi
-            # que alimentarla aqui rompe la semantica del umbral: lo
-            # subiria por un error que el sistema ya habia senalado como
-            # dudoso. Los calibradores y el bandit si aprenden de ella.
+            # The threshold targets the error rate among ACCEPTED
+            # answers. A decision the loop abstained on was not accepted,
+            # so feeding it here breaks the threshold's semantics: it
+            # would raise the bar for an error the system had already
+            # flagged as doubtful. The calibrators and the bandit do learn
+            # from it.
             if not decision.abstained:
                 self._threshold.update_on_accepted_outcome(decision.task_type, correct)
 
         self._save_state()
 
-    # ----------------------------------------------------------- auditoría
+    # ------------------------------------------------------------- audit
     def explain(self, decision_id: str) -> dict:
         decision = self.store.get_decision(decision_id)
         if decision is None:
-            raise KeyError(f"No existe una decision con id={decision_id!r}")
+            raise KeyError(f"No decision exists with id={decision_id!r}")
         outcomes = self.store.get_outcomes(decision_id)
         return {
             "decision": decision,
@@ -228,15 +230,15 @@ class DualLoop:
             "current_threshold": self._threshold.get(decision.task_type),
         }
 
-    # --------------------------------------------- persistencia del estado
+    # ------------------------------------------------- state persistence
     def _save_state(self) -> None:
-        # Los calibradores se guardan en un unico blob, que se reescribe
-        # entero en cada outcome: el coste es O(pares task_type x motor).
-        # Es deliberado. Guardar un blob por calibrador obligaria a
-        # mantener ademas un indice, porque el protocolo `Store` no expone
-        # forma de enumerar claves, y el ahorro solo se nota con cientos de
-        # task_types. Si algun dia lo hace, ese es el cambio: un blob
-        # "calibrators::index" con las claves, mas uno por calibrador.
+        # Calibrators are stored in a single blob, rewritten in full on
+        # every outcome: the cost is O(task_type x engine pairs). This is
+        # deliberate. One blob per calibrator would also require keeping an
+        # index, because the `Store` protocol exposes no way to enumerate
+        # keys, and the saving only shows up with hundreds of task types.
+        # If it ever does, that is the change: a "calibrators::index" blob
+        # holding the keys, plus one blob per calibrator.
         self.store.save_state_blob("bandit", self._bandit.state_dict())
         self.store.save_state_blob("threshold", self._threshold.state_dict())
         self.store.save_state_blob(

@@ -1,12 +1,13 @@
-"""Arbitraje aprendido entre motores heterogéneos: a qué motor consultar
-primero (ReliabilityBandit) y cuándo dejar de escalar (AdaptiveThreshold).
+"""Learned arbitration across heterogeneous engines: which engine to
+consult first (ReliabilityBandit) and when to stop escalating
+(AdaptiveThreshold).
 
-Ningún router comercial revisado (RouteLLM, OpenRouter, Martian, Not
-Diamond) ni meta-controlador de investigación (Meta-Reasoner,
-arXiv:2502.19918; AAMC) arbitra entre motores de naturaleza distinta —
-todos enrutan entre variantes de LLM. Aquí el "motor" es una etiqueta
-opaca: puede ser un LLM, un clasificador tipado o una regla; el bandit no
-necesita saber la diferencia, solo si acertó o no.
+No reviewed commercial router (RouteLLM, OpenRouter, Martian, Not Diamond)
+nor research meta-controller (Meta-Reasoner, arXiv:2502.19918; AAMC)
+arbitrates between engines of genuinely different kinds -- they all route
+between LLM variants. Here "engine" is an opaque label: it can be an LLM, a
+typed classifier or a rule. The bandit does not need to know the
+difference, only whether it was right.
 """
 
 from __future__ import annotations
@@ -34,14 +35,14 @@ class _Arm:
 
 
 class ReliabilityBandit:
-    """Thompson sampling Beta-Bernoulli por (task_type, motor).
+    """Beta-Bernoulli Thompson sampling per (task_type, engine).
 
-    Se usa solo para ORDENAR la cascada (qué motor probar primero), no para
-    decidir la respuesta final — eso lo hace la confianza calibrada de cada
-    voto. En frío, sin ninguna observación, se aplica un sesgo optimista
-    suave a favor de los motores más baratos (`cost_by_engine`) para que la
-    cascada empiece explorando por el motor barato en vez de al azar; el
-    sesgo se diluye rápido en cuanto llegan outcomes reales.
+    Used only to ORDER the cascade -- which engine to try first -- never to
+    decide the final answer; that is what each vote's calibrated confidence
+    does. On a cold start, with no observations at all, a mild optimistic
+    bias favours the cheaper engines (`cost_by_engine`) so the cascade
+    begins by exploring the cheap engine rather than at random. The bias
+    dilutes quickly once real outcomes arrive.
     """
 
     def __init__(
@@ -82,42 +83,44 @@ class ReliabilityBandit:
 
 
 class AdaptiveThreshold:
-    """Umbral de aceptación por task_type, ajustado online vía aproximación
-    estocástica de paso constante.
+    """Per-task_type acceptance threshold, adjusted online by constant-step
+    stochastic approximation.
 
-    Cada vez que se acepta una respuesta y se conoce su outcome real, el
-    umbral se desplaza hacia el punto donde la tasa de error de las
-    respuestas aceptadas iguala `target_error_rate`: si el error observado
-    supera el objetivo, sube (más exigente, escala más); si es menor, baja
-    un poco (menos escalamiento innecesario, más barato).
+    Every time an answer is accepted and its real outcome becomes known,
+    the threshold moves towards the point where the error rate of accepted
+    answers equals `target_error_rate`: if the observed error exceeds the
+    target it rises (stricter, escalates more); if it is lower it falls a
+    little (less needless escalation, cheaper).
 
-    **Sobre el paso.** `lr` es constante, no decreciente, así que esto es
-    aproximación estocástica de **paso constante** y no converge en el
-    sentido de Robbins-Monro: oscila alrededor del equilibrio. Es
-    deliberado — con paso decreciente el umbral se congelaría, y aquí se
-    espera que la fiabilidad de los motores cambie con el tiempo (cambias
-    de modelo, el servidor jev se actualiza, el dominio deriva).
+    **On the step.** `lr` is constant, not decreasing, so this is
+    **constant-step** stochastic approximation and does not converge in the
+    Robbins-Monro sense: it oscillates around the equilibrium. That is
+    deliberate -- with a decreasing step the threshold would freeze, and
+    engine reliability is expected to drift over time (you change model,
+    the jev server is updated, the domain shifts).
 
-    **Sobre los límites.** `lo` es el suelo real del sistema: cuando los
-    motores rinden mejor que `target_error_rate`, el umbral baja hasta
-    pegarse a `lo` y se queda ahí, así que a partir de ese punto es `lo`
-    —y no `target_error_rate`— quien decide qué se acepta. Por eso el
-    suelo por defecto es 0.8 y no 0.5: aceptar una respuesta con un 50 %
-    de confianza calibrada rara vez es lo que se quiere, y con `lo` bajo
-    la abstención casi nunca salta. `default` arranca por encima del
-    suelo para que la adaptación a la baja tenga recorrido; con
-    `default == lo` el umbral solo podría subir.
+    **On the bounds.** `lo` is the system's real floor: when the engines
+    perform better than `target_error_rate`, the threshold falls until it
+    rests on `lo` and stays there, so past that point it is `lo` -- not
+    `target_error_rate` -- that decides what gets accepted. That is why the
+    default floor is 0.8 rather than 0.5: accepting an answer at 50%
+    calibrated confidence is rarely what anyone wants, and with a low `lo`
+    abstention almost never fires. `default` starts above the floor so that
+    downward adaptation has room; with `default == lo` the threshold could
+    only ever rise.
 
-    El equilibrio sí es el correcto: en régimen estacionario la tasa de
-    error de lo aceptado tiende a `target_error_rate`, porque
-    `p·lr·(1−t) = (1−p)·lr·t` se cumple exactamente en `p = t`.
+    The equilibrium is nonetheless the right one: in steady state the error
+    rate of accepted answers tends to `target_error_rate`, because
+    `p*lr*(1-t) = (1-p)*lr*t` holds exactly at `p = t`.
 
-    Con los valores por defecto (`lr=0.01`, `target_error_rate=0.05`) un
-    fallo sube el umbral 0,0095 y un acierto lo baja 0,0005; sobre el rango
-    útil `[0.5, 0.97]` eso es un 2 % por fallo. Con el `lr=0.05` anterior
-    era un 10 % por fallo: un único error aislado movía el umbral
-    demasiado. El precio de bajarlo es que hacen falta unas cinco veces más
-    observaciones para recorrer la misma distancia.
+    With the defaults (`lr=0.01`, `target_error_rate=0.05`) a wrong outcome
+    raises the threshold by 0.0095 and a correct one lowers it by 0.0005.
+    Over the default range `[0.8, 0.97]` that is 5.6% of the possible
+    travel per error; over a wider range such as `[0.5, 0.97]` it would be
+    2%. The previous `lr=0.05` moved it about 10% of that wider range per
+    error -- a single isolated mistake shifted the threshold too far. The
+    price of lowering it is needing roughly five times as many
+    observations to travel the same distance.
     """
 
     def __init__(
@@ -128,11 +131,11 @@ class AdaptiveThreshold:
         lo: float = 0.8,
         hi: float = 0.97,
     ) -> None:
-        # El suelo manda sobre el arranque: pedir `default` fuera de
-        # [lo, hi] no es un error del llamante, es una politica que los
-        # limites recortan. Sin esto un default por debajo del suelo daria
-        # un umbral inicial que ninguna actualizacion posterior podria
-        # devolver a ese valor, que es incoherente y silencioso.
+        # The floor overrides the starting point: asking for a `default`
+        # outside [lo, hi] is not a caller error, it is a policy the bounds
+        # correct. Without this, a default below the floor would give an
+        # initial threshold that no later update could ever return to --
+        # incoherent, and silently so.
         self.default = min(max(default, lo), hi)
         self.lr = lr
         self.target_error_rate = target_error_rate

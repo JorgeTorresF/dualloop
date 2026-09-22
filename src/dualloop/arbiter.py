@@ -1,21 +1,22 @@
-"""El árbitro: orquesta la cascada de consulta entre motores heterogéneos.
+"""The arbiter: orchestrates the consultation cascade across heterogeneous
+engines.
 
-Flujo por cada decisión:
-1. Ordena los motores disponibles para este task_type por fiabilidad
-   aprendida (ReliabilityBandit.rank), con sesgo inicial a favor de los
-   baratos mientras no hay evidencia.
-2. Consulta el primero, calibra su confianza cruda (ConfidenceCalibrator).
-3. Si la confianza calibrada alcanza el umbral adaptativo del task_type,
-   acepta esa respuesta y NO sigue escalando (ahorro de coste).
-4. Si no, pasa al siguiente motor en el orden aprendido, hasta agotar la
-   lista o el límite `max_engines_per_decision`.
-5. Se queda con el voto de mayor confianza calibrada entre todos los
-   consultados, y marca `disagreement=True` si los motores no coincidieron.
+Flow for each decision:
+1. Rank the engines available for this task_type by learned reliability
+   (ReliabilityBandit.rank), biased towards cheap ones while there is no
+   evidence yet.
+2. Consult the first, calibrate its raw confidence (ConfidenceCalibrator).
+3. If the calibrated confidence clears the task type's adaptive threshold,
+   accept that answer and do NOT escalate further (cost saving).
+4. Otherwise move to the next engine in the learned order, until the list
+   or the `max_engines_per_decision` limit runs out.
+5. Keep the vote with the highest calibrated confidence among all engines
+   consulted, and set `disagreement=True` if they did not agree.
 
-Todo el proceso queda registrado en el `Decision` resultante — qué motores
-se consultaron, en qué orden, sus salidas crudas y calibradas, y el umbral
-usado — para que `DualLoop.explain()` pueda reconstruir por qué se decidió
-lo que se decidió.
+The whole process is recorded in the resulting `Decision` -- which engines
+were consulted, in what order, their raw and calibrated outputs, and the
+threshold used -- so that `DualLoop.explain()` can reconstruct why the
+decision came out the way it did.
 """
 
 from __future__ import annotations
@@ -66,7 +67,7 @@ class Arbiter:
     ) -> ArbitrationResult:
         names = engine_subset or list(self._engines.keys())
         if not names:
-            raise ValueError("No hay motores disponibles para arbitrar esta decisión")
+            raise ValueError("No engines available to arbitrate this decision")
 
         order = self._bandit.rank(task_type, names)
         threshold = self._threshold.get(task_type)
@@ -96,18 +97,18 @@ class Arbiter:
             if best is None or vote.calibrated_confidence > best.calibrated_confidence:
                 best = vote
             if calibrated >= threshold:
-                break  # confianza suficiente: no seguimos escalando
+                break  # confident enough: stop escalating
 
         if best is None:
             raise RuntimeError(
-                f"Ningun motor pudo responder para task_type={task_type!r} "
-                f"(motores consultados: {consulted})"
+                f"No engine could answer for task_type={task_type!r} "
+                f"(engines consulted: {consulted})"
             )
 
         disagreement = len({v.value for v in votes}) > 1
-        # Si se agoto la cascada sin que nadie alcanzara el umbral, el
-        # sistema no tiene una respuesta en la que confie. Marcarlo es lo
-        # honesto: decidir igualmente convierte el umbral en decorativo.
+        # If the cascade ran out without anyone clearing the threshold,
+        # the system has no answer it trusts. Saying so is the honest
+        # move: deciding anyway makes the threshold decorative.
         abstained = (
             self._abstain_below_threshold and best.calibrated_confidence < threshold
         )

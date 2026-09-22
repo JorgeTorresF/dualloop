@@ -1,7 +1,7 @@
 [project]
 name = "dualloop"
 version = "0.1.0"
-description = "Arbitraje aprendido y auditable entre motores de decision heterogeneos (LLM + clasificadores tipados + reglas), con cierre del bucle decision-resultado-recalibracion sin reentrenamiento manual."
+description = "Learned, auditable arbitration between heterogeneous decision engines (LLMs + typed classifiers + rules), closing the loop decision-outcome-recalibration with no manual retraining."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
