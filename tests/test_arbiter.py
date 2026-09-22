@@ -19,10 +19,17 @@ class FixedEngine(BaseEngine):
         return self._value, self._confidence, {}
 
 
-def make_arbiter(engines, threshold_default=0.7, max_engines=None):
+def make_arbiter(engines, threshold_default=0.7, max_engines=None, seed=0):
+    # `seed` fijo a proposito: el orden de consulta lo decide Thompson
+    # sampling, que es aleatorio. Sin semilla estos tests son inestables
+    # (fallaban ~30% de las ejecuciones) porque a veces se consultaba
+    # primero el motor caro. El orden lo prueba test_bandit.py; aqui lo
+    # que se prueba es el arbitraje dado un orden.
     engines_by_name = {e.name: e for e in engines}
     calibrators = {}
-    bandit = ReliabilityBandit(cost_by_engine={e.name: e.relative_cost for e in engines})
+    bandit = ReliabilityBandit(
+        cost_by_engine={e.name: e.relative_cost for e in engines}, seed=seed
+    )
     threshold = AdaptiveThreshold(default=threshold_default)
     return Arbiter(engines_by_name, calibrators, bandit, threshold, max_engines_per_decision=max_engines)
 

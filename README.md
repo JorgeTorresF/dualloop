@@ -18,13 +18,17 @@ enrutan solo entre variantes de LLM, nunca entre motores de naturaleza
 distinta) son dos piezas concretas:
 
 1. **Un árbitro aprendido y auditable entre motores heterogéneos.** Ningún
-   meta-controlador de investigación revisado (Meta-Reasoner,
-   [arXiv:2502.19918](https://arxiv.org/abs/2502.19918); AAMC,
-   [ScienceDirect S0925231226005898](https://www.sciencedirect.com/science/article/pii/S0925231226005898))
-   arbitra entre un LLM, un clasificador tipado y reglas bajo un contrato
-   común; todos rutan entre variantes de LLM y sus propios autores
-   reconocen que solo se han validado en simulación, sin auditabilidad
-   documentada.
+   trabajo revisado arbitra entre un LLM, un clasificador tipado y reglas
+   deterministas bajo un contrato común. Los meta-controladores existentes
+   rutan entre **variantes de LLM** — AAMC
+   ([ScienceDirect S0925231226005898](https://www.sciencedirect.com/science/article/pii/S0925231226005898))
+   orquesta SLM/LLM con aprendizaje por refuerzo — o ni siquiera eso:
+   Meta-Reasoner ([arXiv:2502.19918](https://arxiv.org/abs/2502.19918))
+   opera *dentro* de un único modelo, usando bandits contextuales para
+   decidir cuándo retroceder, cambiar de enfoque o reiniciar el
+   razonamiento. Es el pariente más cercano de DualLoop en el uso de
+   bandits para meta-decisiones, pero su espacio de acciones son
+   estrategias de razonamiento, no motores.
 2. **Cierre del bucle sin reentrenamiento manual.** La investigación sobre
    memoria de agentes (Mem0, ["State of AI Agent Memory 2026"](https://mem0.ai/blog/state-of-ai-agent-memory-2026))
    confirma que la memoria *procedimental* (aprender de outcomes) "sigue en
@@ -72,27 +76,38 @@ engines = [
     OpenAICompatibleLLMEngine(
         base_url="https://openrouter.ai/api/v1",
         api_key="sk-...",
-        model="anthropic/claude-sonnet-4.5",
+        model="anthropic/claude-sonnet-5",
     ),
-    RuleEngine(lambda task_type, q: ("urgente", 0.99) if "URGENTE" in q.state else None),
+    # Una regla determinista gana a cualquier modelo cuando el caso es obvio:
+    # si hay posología explícita, es una prescripción y no hay nada que deliberar.
+    RuleEngine(lambda task_type, q: ("prescribe", 0.99) if " mg" in q.state else None),
 ]
 
 loop = DualLoop(engines=engines)
 
+# Gate de estilo sobre un informe que va a leer un paciente: el informe
+# recomienda y deriva al médico, nunca pauta.
 question = Question(
     type="choice",
-    instructions="¿Es esta factura elegible para la subvención X?",
-    state="Factura de material deportivo, importe 1.200€, fecha dentro de plazo.",
-    criteria={"elegible": None, "no_elegible": None},
+    instructions="¿Este párrafo prescribe un tratamiento o solo recomienda?",
+    state="Conviene que valores con tu médico si procede revisar la pauta actual.",
+    criteria={"recomienda": None, "prescribe": None},
 )
 
-decision = loop.decide(task_type="elegibilidad_subvencion", question=question)
+decision = loop.decide(task_type="gate_prescripcion", question=question)
 print(decision.chosen_engine, decision.chosen_value, decision.chosen_confidence)
 
-# ... más tarde, cuando se conoce el resultado real (revisión humana,
-# resolución de la convocatoria, lo que sea) ...
+# ... cuando el revisor humano confirma o corrige el veredicto ...
 loop.report_outcome(decision.id, correct=True)
 ```
+
+**Por qué este ejemplo y no otro.** DualLoop aprende de outcomes, así que
+solo rinde donde los outcomes llegan pronto y en cantidad: decenas o
+cientos de casos por tipo de tarea, con la verdad conocida en horas o días.
+Un gate de revisión sobre documentos que ya se revisan a diario encaja. Una
+decisión que se toma cinco veces al año y cuya verdad tarda meses —evaluar
+una solicitud de subvención, por ejemplo— no encaja: el calibrador nunca
+sale del arranque en frío y no notarás diferencia frente a una regla fija.
 
 Cada `report_outcome()` recalibra online la confianza de los motores para
 ese tipo de tarea, ajusta qué tan fiable parece cada motor, y mueve el
@@ -103,7 +118,7 @@ Para Anthropic/Claude en vez de un endpoint OpenAI-compatible:
 ```python
 from dualloop.engines import AnthropicLLMEngine
 
-llm = AnthropicLLMEngine(api_key="sk-ant-...", model="claude-sonnet-4-5")
+llm = AnthropicLLMEngine(api_key="sk-ant-...", model="claude-sonnet-5")
 ```
 
 Para persistir el estado entre reinicios del proceso:

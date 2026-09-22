@@ -19,7 +19,7 @@ from .calibration import ConfidenceCalibrator
 from .engines.base import BaseEngine
 from .heuristics import OutcomeHeuristic
 from .store import InMemoryStore, Store
-from .types import Decision, Outcome, Question
+from .types import Decision, Outcome, Question, Vote
 
 
 class DualLoop:
@@ -87,9 +87,10 @@ class DualLoop:
         (resultado ambiguo o aún desconocido). `per_engine_correct` permite
         dar la verdad por motor cuando se conoce (p.ej. en un set de
         evaluación offline) para una recalibración más precisa que la
-        aproximación por defecto (solo el motor elegido recibe la señal
-        exacta; los demás se aproximan por si coincidieron con la
-        respuesta elegida).
+        inferencia por defecto, que solo tiene certeza sobre el motor
+        elegido y sobre los que coincidieron con él; ver
+        `_infer_vote_correct`, que deja sin actualizar los votos cuya
+        verdad no se puede deducir.
         """
         decision = self.store.get_decision(decision_id)
         if decision is None:
@@ -128,6 +129,46 @@ class DualLoop:
                 inferred.append(outcome)
         return inferred
 
+    @staticmethod
+    def _infer_vote_correct(
+        decision: Decision, vote: Vote, correct: bool
+    ) -> Optional[bool]:
+        """Infiere si un voto acerto, a partir del outcome de la elegida.
+
+        El motor elegido recibe la senal exacta. Para los demas:
+
+        - si la elegida acerto, quien discrepo fallo;
+        - si la elegida fallo, quien coincidio fallo;
+        - si la elegida fallo y el motor discrepo, depende de cuantas
+          respuestas posibles habia. Con dos (``choice`` binario o
+          ``noul``) el discrepante acerto necesariamente. Con mas de dos,
+          saber que la elegida era falsa NO identifica cual era la buena.
+
+        Devuelve ``None`` cuando la verdad del voto es desconocida; el
+        llamante no actualiza nada en ese caso. Es deliberadamente
+        conservador: alimentar al calibrador con una etiqueta inventada
+        sesga el sistema hacia el consenso, que es exactamente lo que un
+        arbitro entre motores heterogeneos no debe hacer. Si prefieres mas
+        senal a cambio de suponer uniformidad entre las opciones
+        restantes, esta es la unica linea que hay que cambiar (por ejemplo
+        devolviendo una actualizacion ponderada por 1/(n_options - 1)).
+        """
+        if vote.engine_name == decision.chosen_engine:
+            return correct
+
+        agreed = vote.value == decision.chosen_value
+        if correct:
+            return agreed
+        if agreed:
+            return False
+
+        n_options = (
+            2
+            if decision.question.type == "noul"
+            else len(decision.question.criteria or ())
+        )
+        return True if n_options == 2 else None
+
     def _recalibrate(
         self,
         decision: Decision,
@@ -136,14 +177,12 @@ class DualLoop:
     ) -> None:
         for vote in decision.votes:
             if per_engine_correct and vote.engine_name in per_engine_correct:
-                vote_correct = per_engine_correct[vote.engine_name]
+                vote_correct: Optional[bool] = per_engine_correct[vote.engine_name]
             elif correct is not None:
-                vote_correct = (
-                    correct
-                    if vote.engine_name == decision.chosen_engine
-                    else (vote.value == decision.chosen_value and correct)
-                )
+                vote_correct = self._infer_vote_correct(decision, vote, correct)
             else:
+                continue
+            if vote_correct is None:
                 continue
             calibrator = self._calibrators.setdefault(
                 (decision.task_type, vote.engine_name), ConfidenceCalibrator()

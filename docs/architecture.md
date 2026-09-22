@@ -12,15 +12,22 @@ Jev (System 1), la investigación encontró que la pieza que falta no es un
 tercer tipo de modelo, sino:
 
 1. **Un árbitro aprendido y auditable entre motores heterogéneos.** La
-   literatura de routing/cascading (RouteLLM, [arXiv:2410.10347](https://arxiv.org/abs/2410.10347);
-   Meta-Reasoner, [arXiv:2502.19918](https://arxiv.org/abs/2502.19918); AAMC,
-   [ScienceDirect S0925231226005898](https://www.sciencedirect.com/science/article/pii/S0925231226005898);
-   CP-Router, arXiv:2505.19970) arbitra siempre entre **variantes de LLM**
-   (fuerte/débil, LLM/LRM). Ningún trabajo revisado formaliza el arbitraje
-   entre un LLM, un clasificador tipado no-generativo y reglas deterministas
-   bajo un contrato común y auditable. Los propios autores de AAMC reconocen
-   que sus resultados provienen de "experimentos de simulación de alta
-   fidelidad, no de despliegues de producción reales".
+   literatura de routing/cascading —"A Unified Approach to Routing and
+   Cascading for LLMs", [arXiv:2410.10347](https://arxiv.org/abs/2410.10347);
+   CP-Router, [arXiv:2505.19970](https://arxiv.org/abs/2505.19970); AAMC,
+   [ScienceDirect S0925231226005898](https://www.sciencedirect.com/science/article/pii/S0925231226005898)—
+   arbitra siempre entre **variantes de LLM** (fuerte/débil, LLM/LRM,
+   SLM/LLM). Meta-Reasoner
+   ([arXiv:2502.19918](https://arxiv.org/abs/2502.19918)) ni siquiera
+   enruta entre modelos: opera dentro de un único LLM y usa bandits
+   contextuales para elegir *estrategia de razonamiento* (retroceder,
+   cambiar de enfoque, reiniciar). Comparte con DualLoop la idea de un
+   bandit que aprende meta-decisiones, pero su espacio de acciones son
+   estrategias, no motores.
+
+   Ningún trabajo revisado formaliza el arbitraje entre un LLM, un
+   clasificador tipado no-generativo y reglas deterministas bajo un
+   contrato común y auditable.
 2. **Cierre del bucle decisión → resultado → recalibración sin
    reentrenamiento manual.** Mem0 ("State of AI Agent Memory 2026",
    [mem0.ai/blog/state-of-ai-agent-memory-2026](https://mem0.ai/blog/state-of-ai-agent-memory-2026))
