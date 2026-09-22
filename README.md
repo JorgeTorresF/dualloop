@@ -1,108 +1,109 @@
 # DualLoop
 
-Arbitraje aprendido y auditable entre motores de decisión heterogéneos
-(un LLM de razonamiento, un clasificador tipado tipo [Jev/simple-jev](https://github.com/featherless-ai/simple-jev),
-reglas deterministas...), con **cierre del bucle decisión → resultado →
-recalibración sin reentrenamiento manual**.
+Learned, auditable arbitration between heterogeneous decision engines (a
+reasoning LLM, a typed classifier such as
+[Jev/simple-jev](https://github.com/featherless-ai/simple-jev),
+deterministic rules...), closing the loop **decision → outcome →
+recalibration, with no manual retraining**.
 
-## Por qué existe esto
+*Lee este README [en español](README.es.md).*
 
-Es habitual combinar hoy un LLM "System 2" (razonamiento lento, caro,
-general) con un clasificador rápido y tipado "System 1" — el propio
+## Why this exists
+
+Pairing a "System 2" LLM (slow, expensive, general reasoning) with a fast
+typed "System 1" classifier is now common —
 [TypeSafe AI/Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev)
-se lanzó en septiembre de 2026 posicionándose explícitamente así. Lo que
-**no existe todavía, ni en frameworks de orquestación mainstream
-(LangGraph, CrewAI, AutoGen, Semantic Kernel) ni en los routers
-comerciales de LLM** (RouteLLM, OpenRouter, Martian, Not Diamond — todos
-enrutan solo entre variantes de LLM, nunca entre motores de naturaleza
-distinta) son dos piezas concretas:
+launched in September 2026 positioning itself exactly that way. What does
+**not exist yet, neither in mainstream orchestration frameworks (LangGraph,
+CrewAI, AutoGen, Semantic Kernel) nor in commercial LLM routers**
+(RouteLLM, OpenRouter, Martian, Not Diamond — all of which route only
+between LLM variants, never between engines of genuinely different kinds)
+are two specific pieces:
 
-1. **Un árbitro aprendido y auditable entre motores heterogéneos.** Ningún
-   trabajo revisado arbitra entre un LLM, un clasificador tipado y reglas
-   deterministas bajo un contrato común. Los meta-controladores existentes
-   rutan entre **variantes de LLM** — AAMC
+1. **A learned, auditable arbiter across heterogeneous engines.** No
+   reviewed work arbitrates between an LLM, a typed classifier and
+   deterministic rules under one common contract. Existing
+   meta-controllers route between **LLM variants** — AAMC
    ([ScienceDirect S0925231226005898](https://www.sciencedirect.com/science/article/pii/S0925231226005898))
-   orquesta SLM/LLM con aprendizaje por refuerzo — o ni siquiera eso:
+   orchestrates SLM/LLM with reinforcement learning — or not even that:
    Meta-Reasoner ([arXiv:2502.19918](https://arxiv.org/abs/2502.19918))
-   opera *dentro* de un único modelo, usando bandits contextuales para
-   decidir cuándo retroceder, cambiar de enfoque o reiniciar el
-   razonamiento. Es el pariente más cercano de DualLoop en el uso de
-   bandits para meta-decisiones, pero su espacio de acciones son
-   estrategias de razonamiento, no motores.
-2. **Cierre del bucle sin reentrenamiento manual.** La investigación sobre
-   memoria de agentes (Mem0, ["State of AI Agent Memory 2026"](https://mem0.ai/blog/state-of-ai-agent-memory-2026))
-   confirma que la memoria *procedimental* (aprender de outcomes) "sigue en
-   etapa temprana"; los frameworks de "decision provenance"
-   ([arXiv:2602.22442](https://arxiv.org/html/2602.22442v1)) se detienen
-   deliberadamente en auditoría para humanos y no llegan al auto-ajuste; y
-   el trabajo más cercano a una solución sin gradientes (JitRL,
-   [arXiv:2601.18510](https://arxiv.org/abs/2601.18510)) sigue siendo un
-   prototipo de investigación, no una librería usable.
+   operates *within* a single model, using contextual bandits to decide
+   when to backtrack, switch approach or restart its reasoning. It is
+   DualLoop's closest relative in using bandits for meta-decisions, but
+   its action space is reasoning strategies, not engines.
+2. **Closing the loop without manual retraining.** Research on agent
+   memory (Mem0, ["State of AI Agent Memory 2026"](https://mem0.ai/blog/state-of-ai-agent-memory-2026))
+   confirms that *procedural* memory — learning from outcomes — "remains
+   in an early stage"; "decision provenance" frameworks
+   ([arXiv:2602.22442](https://arxiv.org/html/2602.22442v1)) deliberately
+   stop at auditability for humans and never reach self-adjustment; and
+   the closest thing to a gradient-free solution (JitRL,
+   [arXiv:2601.18510](https://arxiv.org/abs/2601.18510)) is still a
+   research prototype rather than a usable library.
 
-DualLoop no resuelve esto con un modelo nuevo, sino con matemática simple
-y auditable (calibración bayesiana por bins + bandits Beta-Bernoulli +
-aproximación estocástica de paso constante) que funciona con **cualquier
-motor, incluidos APIs cerradas de caja negra** — no requiere acceso a
-logits ni a los pesos del modelo, a diferencia de JitRL. El detalle
-completo de las decisiones de diseño y sus fuentes está en
-[`docs/architecture.md`](docs/architecture.md).
+DualLoop does not solve this with a new model, but with simple, auditable
+maths (Bayesian histogram calibration + Beta-Bernoulli bandits +
+constant-step stochastic approximation) that works with **any engine,
+including closed black-box APIs** — it needs no access to logits or model
+weights, unlike JitRL. The full reasoning behind each design decision, with
+sources, is in [`docs/architecture.md`](docs/architecture.md).
 
-## ¿Te sirve esto?
+## Is this for you?
 
-DualLoop no es un framework de agentes ni un router de LLMs. Es una pieza
-pequeña para un problema concreto: **tienes varias formas de decidir lo
-mismo, con coste y fiabilidad distintos, y quieres usar la barata cuando
-basta y la cara cuando hace falta — sin fijar a mano dónde está ese
-límite.**
+DualLoop is not an agent framework and not an LLM router. It is a small
+piece for one specific problem: **you have several ways to make the same
+decision, with different cost and reliability, and you want to use the
+cheap one when it suffices and the expensive one when it doesn't — without
+hand-tuning where that line sits.**
 
-Encaja si tu caso cumple las cuatro:
+It fits if your case meets all four:
 
-1. **La decisión se repite.** Decenas o cientos de casos del mismo tipo, no
-   una deliberación única.
-2. **La respuesta es tipada.** Una opción entre varias, una puntuación
-   sobre una rúbrica, un juicio de sí/no. No prosa libre.
-3. **La verdad acaba llegando.** Alguien revisa, el caso se resuelve, el
-   cliente responde. En horas o días, no en meses.
-4. **Tienes motores desiguales.** Un clasificador pequeño y una API cara;
-   o reglas y un LLM. Si solo tienes un motor, no hay nada que arbitrar.
+1. **The decision repeats.** Tens or hundreds of cases of the same kind,
+   not a one-off deliberation.
+2. **The answer is typed.** One option among several, a score on a rubric,
+   a yes/no judgment. Not free prose.
+3. **The truth eventually arrives.** Someone reviews it, the case
+   resolves, the customer replies. In hours or days, not months.
+4. **Your engines are unequal.** A small classifier and an expensive API;
+   or rules and an LLM. With a single engine there is nothing to arbitrate.
 
-Ejemplos que cumplen las cuatro:
+Examples that meet all four:
 
-- **Gates de revisión de contenido.** Publicaciones, informes o respuestas
-  que pasan por un filtro antes de salir; quien revisa confirma o corrige,
-  y esa corrección es la verdad.
-- **Triaje de tickets o incidencias.** Categoría y prioridad; la verdad es
-  dónde acabó realmente el ticket.
-- **Moderación y detección de abuso.** Reglas baratas para lo evidente,
-  clasificador para el volumen, LLM para lo ambiguo.
-- **Control de calidad de extracción de datos.** ¿Este campo extraído es
-  correcto? Los muestreos humanos realimentan el sistema.
-- **Gates en CI.** ¿Este cambio necesita revisión humana? La verdad es si
-  quien revisó encontró algo.
-- **Cualificación de leads o filtrado de spam**, donde el desenlace se
-  conoce poco después.
+- **Content review gates.** Posts, reports or replies that pass a filter
+  before going out; whoever reviews confirms or corrects, and that
+  correction is the ground truth.
+- **Ticket or incident triage.** Category and priority; the truth is where
+  the ticket actually ended up.
+- **Moderation and abuse detection.** Cheap rules for the obvious,
+  a classifier for volume, an LLM for the ambiguous.
+- **Quality control on data extraction.** Is this extracted field right?
+  Human spot-checks feed back into the system.
+- **CI gates.** Does this change need a human reviewer? The truth is
+  whether the reviewer found anything.
+- **Lead qualification or spam filtering**, where the outcome becomes
+  known shortly afterwards.
 
-Y casos que **no** encajan, para ahorrarte la decepción: decisiones que
-tomas cinco veces al año; verdades que tardan meses en conocerse; salidas
-en prosa; o un único motor. En todos ellos el calibrador se queda en el
-arranque en frío y no notarás diferencia frente a un umbral fijo escrito a
-mano.
+And the cases that **don't** fit, to save you the disappointment:
+decisions you make five times a year; truths that take months to arrive;
+free-prose outputs; or a single engine. In all of those the calibrator
+never leaves cold start and you will not notice any difference from a
+hand-written fixed threshold.
 
-**Lo que aporta frente a hacerlo tú.** Podrías escribir el `if
-confianza > 0.8` a mano. Lo que no es trivial es lo demás: que la confianza
-de motores distintos sea comparable entre sí, que ese `0.8` se mueva solo
-según los errores que de verdad cometes, que el orden de consulta aprenda
-cuál es fiable para cada tipo de tarea, y que todo quede auditable caso a
-caso. Eso es lo que hay aquí, en unas pocas páginas de matemática que
-puedes leer entera.
+**What it gives you over rolling your own.** You could write the
+`if confidence > 0.8` yourself. What is not trivial is the rest: making
+confidence from different engines comparable at all, having that `0.8`
+move on its own according to the errors you actually make, having the
+consultation order learn which engine is reliable for each task type, and
+keeping every case auditable afterwards. That is what lives here, in a few
+pages of maths you can read end to end.
 
-## Instalación
+## Installation
 
 ```bash
 pip install "dualloop @ git+https://github.com/JorgeTorresF/dualloop.git"
 ```
 
-O en modo desarrollo, clonando el repo:
+Or in development mode, cloning the repo:
 
 ```bash
 git clone https://github.com/JorgeTorresF/dualloop.git
@@ -111,8 +112,8 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Sin dependencias obligatorias más allá de `httpx`. El extra `demo` añade
-`matplotlib` (opcional, solo para graficar el ejemplo sintético).
+No required dependencies beyond `httpx`. The `demo` extra adds
+`matplotlib` (optional, only to plot the synthetic example).
 
 ## Quickstart
 
@@ -127,42 +128,42 @@ engines = [
         api_key="sk-...",
         model="anthropic/claude-sonnet-5",
     ),
-    # Una regla determinista gana a cualquier modelo cuando el caso es obvio:
-    # si hay posología explícita, es una prescripción y no hay nada que deliberar.
-    RuleEngine(lambda task_type, q: ("prescribe", 0.99) if " mg" in q.state else None),
+    # A deterministic rule beats any model when the case is obvious: an
+    # explicit dosage means a prescription, and there is nothing to weigh.
+    RuleEngine(lambda task_type, q: ("prescribes", 0.99) if " mg" in q.state else None),
 ]
 
 loop = DualLoop(engines=engines)
 
-# Gate de estilo sobre un informe que va a leer un paciente: el informe
-# recomienda y deriva al médico, nunca pauta.
+# A style gate on a report a patient will read: the report recommends and
+# refers to a doctor, it never prescribes.
 question = Question(
     type="choice",
-    instructions="¿Este párrafo prescribe un tratamiento o solo recomienda?",
-    state="Conviene que valores con tu médico si procede revisar la pauta actual.",
-    criteria={"recomienda": None, "prescribe": None},
+    instructions="Does this paragraph prescribe a treatment, or merely recommend?",
+    state="You may want to discuss with your doctor whether your current plan needs review.",
+    criteria={"recommends": None, "prescribes": None},
 )
 
-decision = loop.decide(task_type="gate_prescripcion", question=question)
+decision = loop.decide(task_type="prescription_gate", question=question)
 print(decision.chosen_engine, decision.chosen_value, decision.chosen_confidence)
 
-# ... cuando el revisor humano confirma o corrige el veredicto ...
+# ... once the human reviewer confirms or corrects the verdict ...
 loop.report_outcome(decision.id, correct=True)
 ```
 
-**Por qué este ejemplo y no otro.** DualLoop aprende de outcomes, así que
-solo rinde donde los outcomes llegan pronto y en cantidad: decenas o
-cientos de casos por tipo de tarea, con la verdad conocida en horas o días.
-Un gate de revisión sobre documentos que ya se revisan a diario encaja. Una
-decisión que se toma cinco veces al año y cuya verdad tarda meses —evaluar
-una solicitud de subvención, por ejemplo— no encaja: el calibrador nunca
-sale del arranque en frío y no notarás diferencia frente a una regla fija.
+**Why this example and not another.** DualLoop learns from outcomes, so it
+only pays off where outcomes arrive soon and in quantity: tens or hundreds
+of cases per task type, with the truth known in hours or days. A review
+gate over documents that are already reviewed daily fits. A decision made
+five times a year whose truth takes months — assessing a grant
+application, say — does not: the calibrator never leaves cold start and you
+will not notice any difference from a fixed rule.
 
-Cada `report_outcome()` recalibra online la confianza de los motores para
-ese tipo de tarea, ajusta qué tan fiable parece cada motor, y mueve el
-umbral de aceptación — sin tocar ningún peso de modelo ni reentrenar nada.
+Each `report_outcome()` recalibrates engine confidence online for that task
+type, adjusts how reliable each engine looks, and moves the acceptance
+threshold — without touching any model weight or retraining anything.
 
-Para Anthropic/Claude en vez de un endpoint OpenAI-compatible:
+For Anthropic/Claude instead of an OpenAI-compatible endpoint:
 
 ```python
 from dualloop.engines import AnthropicLLMEngine
@@ -170,7 +171,7 @@ from dualloop.engines import AnthropicLLMEngine
 llm = AnthropicLLMEngine(api_key="sk-ant-...", model="claude-sonnet-5")
 ```
 
-Para persistir el estado entre reinicios del proceso:
+To persist state across process restarts:
 
 ```python
 from dualloop import SQLiteStore
@@ -178,91 +179,98 @@ from dualloop import SQLiteStore
 loop = DualLoop(engines=engines, store=SQLiteStore("dualloop.db"))
 ```
 
-## Cómo funciona (resumen)
+## How it works (in brief)
 
-1. **`decide()`** ordena los motores disponibles por fiabilidad aprendida
-   (bandit Thompson sampling), consulta el más prometedor primero, calibra
-   su confianza cruda y, si supera el umbral adaptativo del tipo de tarea,
-   acepta esa respuesta sin seguir escalando. Si no, prueba el siguiente
-   motor. Todo queda registrado en un `Decision` auditable.
-2. **`report_outcome()`** actualiza, con una sola llamada, tres
-   estadísticos online: la calibración de confianza del motor usado, su
-   fiabilidad agregada para ese tipo de tarea, y el umbral de aceptación —
-   todo con actualizaciones bayesianas cerradas en O(1), sin gradientes.
-3. **`explain()`** reconstruye por qué se tomó una decisión: qué motores
-   se consultaron, sus votos crudos y calibrados, el umbral usado, y la
-   fiabilidad aprendida en ese momento.
+1. **`decide()`** ranks the available engines by learned reliability
+   (Thompson sampling bandit), consults the most promising first,
+   calibrates its raw confidence and, if that clears the task type's
+   adaptive threshold, accepts the answer without escalating further.
+   Otherwise it tries the next engine. Everything is recorded in an
+   auditable `Decision`.
+2. **`report_outcome()`** updates three online statistics in a single
+   call: the confidence calibration of the engine used, its aggregate
+   reliability for that task type, and the acceptance threshold — all with
+   closed-form Bayesian updates in O(1), no gradients.
+3. **`explain()`** reconstructs why a decision was made: which engines
+   were consulted, their raw and calibrated votes, the threshold in force,
+   and the reliability learned at that moment.
 
-Ver [`docs/architecture.md`](docs/architecture.md) para el detalle
-matemático y la justificación de cada elección de diseño.
+See [`docs/architecture.md`](docs/architecture.md) for the mathematical
+detail and the justification of each design choice.
 
-## Abstención: cuando el sistema no sabe
+## Abstention: when the system does not know
 
-Por defecto, si ningún motor alcanza el umbral, el loop acepta igualmente el
-voto de mayor confianza calibrada: el umbral queda registrado en la decisión
-pero no actúa como suelo. Para un gate donde «no sé, que lo mire una
-persona» es una respuesta legítima, eso no vale:
+By default, if no engine clears the threshold, the loop still accepts the
+highest calibrated vote: the threshold is recorded on the decision but does
+not act as a floor. For a gate where "I don't know, let a person look at
+it" is a legitimate answer, that will not do:
 
 ```python
 loop = DualLoop(engines=engines, abstain_below_threshold=True)
 
-decision = loop.decide(task_type="gate_prescripcion", question=question)
+decision = loop.decide(task_type="prescription_gate", question=question)
 if decision.abstained:
-    enviar_a_revision_humana(decision)   # chosen_value sigue disponible
+    send_to_human_review(decision)   # chosen_value is still available
 else:
-    aplicar(decision.chosen_value)
+    apply(decision.chosen_value)
 ```
 
-Una decisión abstenida **no mueve el umbral de aceptación** cuando reportas
-su outcome: el umbral persigue la tasa de error de lo *aceptado*, y una
-abstención no se aceptó — endurecerlo por un caso que el propio sistema ya
-había marcado como dudoso rompería su semántica. Los calibradores y el
-bandit sí aprenden de ella.
+An abstained decision **does not move the acceptance threshold** when you
+report its outcome: the threshold targets the error rate among *accepted*
+answers, and an abstention was not accepted — raising the bar because of a
+case the system had already flagged as doubtful would break that
+semantics. The calibrators and the bandit do learn from it.
 
-## Demo sintética
+The threshold is bounded by `threshold_lo` and `threshold_hi` (0.8 and
+0.97 by default). When your engines perform better than
+`target_error_rate`, the threshold drifts down until it rests on the floor
+and stays there — so past that point it is `threshold_lo`, not the target
+error rate, that decides what gets accepted. Set it deliberately.
+
+## Synthetic demo
 
 ```bash
 python examples/demo_synthetic.py
 ```
 
-Simula 800 decisiones con tres motores de fiabilidad y coste distintos
-(uno de ellos deliberadamente sobreconfiado en casos difíciles) y muestra
-cómo la precisión, el coste (motores consultados por decisión) y el error
-de calibración evolucionan con la experiencia, sin ninguna intervención
-manual entre medias.
+Simulates 800 decisions across three engines of differing reliability and
+cost (one of them deliberately overconfident on hard cases) and shows how
+accuracy, cost (engines consulted per decision) and calibration error
+evolve with experience, with no manual intervention in between.
 
-## Limitaciones honestas
+## Honest limitations
 
-- La demo es **sintética**: prueba que el mecanismo de recalibración
-  funciona como está diseñado, no que resuelve ningún dominio real. No ha
-  sido validado en producción.
-- El parseo de respuestas `noul` de `JevEngine` está inferido de la
-  especificación pública de simple-jev, no confirmado contra un ejemplo
-  de respuesta real — verifícalo contra el `/docs` de tu propio servidor
-  antes de usarlo en producción.
-- `report_outcome()` sin `per_engine_correct` aproxima el acierto de los
-  motores no elegidos por si coincidieron con la respuesta elegida; para
-  una recalibración más precisa, pasa la verdad conocida por motor cuando
-  la tengas (por ejemplo, en un set de evaluación offline).
-- La licencia del propio servidor `simple-jev` no estaba claramente
-  especificada en su repositorio a fecha de esta investigación (hay un
-  issue abierto al respecto) — este cliente solo habla su protocolo HTTP
-  público y no redistribuye su código, pero verifica la licencia de tu
-  propio despliegue por separado.
-- El bucketing de contexto es por `task_type` explícito, no por similitud
-  semántica entre casos (ver Roadmap).
+- The demo is **synthetic**: it shows the recalibration mechanism behaves
+  as designed, not that it solves any real domain. It has not been
+  validated in production.
+- `JevEngine`'s parsing of `noul` responses is inferred from simple-jev's
+  public specification, not confirmed against a real response — check it
+  against your own server's `/docs` before relying on it in production.
+- Without `per_engine_correct`, `report_outcome()` can only infer the
+  truth for engines other than the chosen one in cases where it follows
+  logically; where it does not (a dissenting engine on a `choice` with
+  more than two options), that vote is left un-updated rather than guessed
+  at. Pass the per-engine truth when you have it — for instance from an
+  offline evaluation set — for a sharper recalibration.
+- The licence of the `simple-jev` server itself was not clearly stated in
+  its repository at the time of this research (there is an open issue
+  about it) — this client only speaks its public HTTP protocol and
+  redistributes none of its code, but verify the licence of your own
+  deployment separately.
+- Context bucketing is by explicit `task_type`, not by semantic similarity
+  between cases (see Roadmap).
 
-## Roadmap / extensiones posibles
+## Roadmap / possible extensions
 
-- Bucketing de contexto por similitud (embeddings) en vez de solo por
-  `task_type`, para generalizar calibración entre casos parecidos.
-- Backends de store adicionales (Postgres, Redis) implementando el mismo
-  protocolo `Store`.
-- Verificación formal como motor adicional para dominios con estructura
-  lógica explícita (código, cumplimiento normativo).
-- Heurísticos de inferencia de outcome adicionales, documentados con sus
-  limitaciones de forma tan explícita como `HumanOverrideHeuristic`.
+- Context bucketing by similarity (embeddings) rather than `task_type`
+  alone, to generalise calibration across similar cases.
+- Additional store backends (Postgres, Redis) implementing the same
+  `Store` protocol.
+- Formal verification as an additional engine for domains with explicit
+  logical structure (code, regulatory compliance).
+- Further outcome-inference heuristics, documented with their limitations
+  as explicitly as `HumanOverrideHeuristic`.
 
-## Licencia
+## Licence
 
-MIT — ver [`LICENSE`](LICENSE).
+MIT — see [`LICENSE`](LICENSE).
