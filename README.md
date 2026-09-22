@@ -47,6 +47,55 @@ logits ni a los pesos del modelo, a diferencia de JitRL. El detalle
 completo de las decisiones de diseño y sus fuentes está en
 [`docs/architecture.md`](docs/architecture.md).
 
+## ¿Te sirve esto?
+
+DualLoop no es un framework de agentes ni un router de LLMs. Es una pieza
+pequeña para un problema concreto: **tienes varias formas de decidir lo
+mismo, con coste y fiabilidad distintos, y quieres usar la barata cuando
+basta y la cara cuando hace falta — sin fijar a mano dónde está ese
+límite.**
+
+Encaja si tu caso cumple las cuatro:
+
+1. **La decisión se repite.** Decenas o cientos de casos del mismo tipo, no
+   una deliberación única.
+2. **La respuesta es tipada.** Una opción entre varias, una puntuación
+   sobre una rúbrica, un juicio de sí/no. No prosa libre.
+3. **La verdad acaba llegando.** Alguien revisa, el caso se resuelve, el
+   cliente responde. En horas o días, no en meses.
+4. **Tienes motores desiguales.** Un clasificador pequeño y una API cara;
+   o reglas y un LLM. Si solo tienes un motor, no hay nada que arbitrar.
+
+Ejemplos que cumplen las cuatro:
+
+- **Gates de revisión de contenido.** Publicaciones, informes o respuestas
+  que pasan por un filtro antes de salir; quien revisa confirma o corrige,
+  y esa corrección es la verdad.
+- **Triaje de tickets o incidencias.** Categoría y prioridad; la verdad es
+  dónde acabó realmente el ticket.
+- **Moderación y detección de abuso.** Reglas baratas para lo evidente,
+  clasificador para el volumen, LLM para lo ambiguo.
+- **Control de calidad de extracción de datos.** ¿Este campo extraído es
+  correcto? Los muestreos humanos realimentan el sistema.
+- **Gates en CI.** ¿Este cambio necesita revisión humana? La verdad es si
+  quien revisó encontró algo.
+- **Cualificación de leads o filtrado de spam**, donde el desenlace se
+  conoce poco después.
+
+Y casos que **no** encajan, para ahorrarte la decepción: decisiones que
+tomas cinco veces al año; verdades que tardan meses en conocerse; salidas
+en prosa; o un único motor. En todos ellos el calibrador se queda en el
+arranque en frío y no notarás diferencia frente a un umbral fijo escrito a
+mano.
+
+**Lo que aporta frente a hacerlo tú.** Podrías escribir el `if
+confianza > 0.8` a mano. Lo que no es trivial es lo demás: que la confianza
+de motores distintos sea comparable entre sí, que ese `0.8` se mueva solo
+según los errores que de verdad cometes, que el orden de consulta aprenda
+cuál es fiable para cada tipo de tarea, y que todo quede auditable caso a
+caso. Eso es lo que hay aquí, en unas pocas páginas de matemática que
+puedes leer entera.
+
 ## Instalación
 
 ```bash
