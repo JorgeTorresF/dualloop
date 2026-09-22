@@ -1,21 +1,20 @@
-"""Demo sintética end-to-end de DualLoop.
+"""End-to-end synthetic demo of DualLoop.
 
-Simula un mundo de juguete con tres motores heterogéneos de fiabilidad y
-coste distintos, y muestra empíricamente que:
+Simulates a toy world with three heterogeneous engines of differing
+reliability and cost, and shows empirically that:
 
-1. La cascada resuelve la mayoría de los casos con el motor barato y solo
-   escalonda al caro cuando hace falta (ahorro de coste).
-2. La calibración de confianza mejora con la experiencia (el motor barato
-   parte deliberadamente MAL calibrado -sobreconfiado en casos difíciles-
-   para que el efecto de corregirlo sea visible).
-3. La precisión de las respuestas aceptadas se mantiene estable o mejora
-   con el tiempo, sin ningún reentrenamiento manual: todo pasa a través de
-   `report_outcome()`.
+1. The cascade resolves most cases with the cheap engine and escalates to
+   the expensive one only when it has to (cost saving).
+2. Confidence calibration improves with experience (the cheap engine
+   starts deliberately MIScalibrated -- overconfident on hard cases -- so
+   that the effect of correcting it is visible).
+3. The accuracy of accepted answers stays stable or improves over time,
+   with no manual retraining: everything goes through `report_outcome()`.
 
-IMPORTANTE: esto es un benchmark SINTÉTICO de referencia, no una validación
-en producción. Sirve para verificar que el mecanismo de recalibración
-funciona como está diseñado, no como prueba de que resuelve un dominio real.
-No requiere red ni credenciales: los tres motores son simulaciones locales.
+IMPORTANT: this is a SYNTHETIC reference benchmark, not a production
+validation. It verifies that the recalibration mechanism behaves as
+designed; it is not evidence that it solves any real domain. It needs no
+network and no credentials: all three engines are local simulations.
 """
 
 from __future__ import annotations
@@ -37,9 +36,9 @@ SEED = 7
 
 
 class SimFastEngine(BaseEngine):
-    """Simula un clasificador tipado tipo Jev: barato, rápido, pero
-    deliberadamente SOBRECONFIADO en casos difíciles (para que el efecto de
-    la calibración sea visible en las métricas)."""
+    """Simulates a Jev-style typed classifier: cheap, fast, but deliberately
+    OVERCONFIDENT on hard cases, so that the effect of calibrating it is
+    visible in the metrics."""
 
     name = "jev_sim"
     relative_cost = 0.1
@@ -56,8 +55,8 @@ class SimFastEngine(BaseEngine):
         if difficulty == "easy":
             confidence = self._rng.uniform(0.78, 0.98)
         else:
-            # sobreconfiado incluso cuando se equivoca: esto es lo que la
-            # calibración debe corregir con la experiencia
+            # Overconfident even when wrong: this is precisely what
+            # calibration has to correct as experience accumulates.
             confidence = self._rng.uniform(0.65, 0.92)
         return value, confidence, {"sim": "fast", "correct": correct}
 
@@ -83,8 +82,8 @@ class SimSlowEngine(BaseEngine):
 
 
 class SimRuleEngine(BaseEngine):
-    """Simula una regla de negocio: gratis e instantánea, pero solo cubre
-    el subconjunto de casos marcados como 'obvious'."""
+    """Simulates a business rule: free and instant, but only covers the
+    subset of cases flagged as 'obvious'."""
 
     name = "rules_sim"
     relative_cost = 0.01
@@ -95,20 +94,20 @@ class SimRuleEngine(BaseEngine):
     def _decide_raw(self, task_type: str, question: Question):
         true_label, difficulty, obvious = question.state.split("|")[1:4]
         if obvious != "yes":
-            raise ValueError("La regla no cubre este caso (no es obvio)")
+            raise ValueError("The rule does not cover this case (not obvious)")
         correct = self._rng.random() < 0.98
         value = true_label if correct else next(o for o in LABELS if o != true_label)
         return value, 0.99, {"sim": "rule", "correct": correct}
 
 
 def make_question(true_label: str, difficulty: str, obvious: str) -> Question:
-    # el estado codifica la verdad simulada para que los motores "hagan
-    # trampa" de forma controlada; en un caso real el estado sería el
-    # contexto de negocio real, no la respuesta
-    state = f"caso_sintetico|{true_label}|{difficulty}|{obvious}"
+    # The state encodes the simulated ground truth so the engines can
+    # "cheat" in a controlled way. In a real case the state would carry the
+    # actual business context, never the answer.
+    state = f"synthetic_case|{true_label}|{difficulty}|{obvious}"
     return Question(
         type="choice",
-        instructions="Elige la categoria correcta para este caso sintetico.",
+        instructions="Choose the correct category for this synthetic case.",
         state=state,
         criteria={"A": None, "B": None},
     )
@@ -137,7 +136,7 @@ def main() -> None:
         obvious = "yes" if rng.random() < 0.15 else "no"
         question = make_question(true_label, difficulty, obvious)
 
-        decision = loop.decide("caso_sintetico", question)
+        decision = loop.decide("synthetic_case", question)
         correct = decision.chosen_value == true_label
 
         per_engine_correct = {v.engine_name: (v.value == true_label) for v in decision.votes}
@@ -151,27 +150,27 @@ def main() -> None:
     n_w = windowed([float(n) for n in n_engines_series], WINDOW)
     calib_w = windowed(calib_error_series, WINDOW)
 
-    print(f"DualLoop - demo sintetica ({N_DECISIONS} decisiones, ventana={WINDOW})\n")
-    print(f"{'ventana':>8} | {'precision':>9} | {'motores/decision':>16} | {'error calibracion':>18}")
+    print(f"DualLoop - synthetic demo ({N_DECISIONS} decisions, window={WINDOW})\n")
+    print(f"{'window':>8} | {'accuracy':>9} | {'engines/decision':>16} | {'calibration err':>18}")
     print("-" * 62)
     for idx in (0, len(acc_w) // 2, len(acc_w) - 1):
         print(f"{idx * WINDOW:>8} | {acc_w[idx]:>9.3f} | {n_w[idx]:>16.2f} | {calib_w[idx]:>18.3f}")
 
-    print("\nComparacion primera ventana vs ultima ventana:")
-    print(f"  precision:            {acc_w[0]:.3f} -> {acc_w[-1]:.3f}")
-    print(f"  motores por decision: {n_w[0]:.2f} -> {n_w[-1]:.2f}  (mas bajo = mas barato)")
-    print(f"  error de calibracion: {calib_w[0]:.3f} -> {calib_w[-1]:.3f}  (mas bajo = mejor calibrado)")
+    print("\nFirst window vs last window:")
+    print(f"  accuracy:             {acc_w[0]:.3f} -> {acc_w[-1]:.3f}")
+    print(f"  engines per decision: {n_w[0]:.2f} -> {n_w[-1]:.2f}  (lower = cheaper)")
+    print(f"  calibration error:    {calib_w[0]:.3f} -> {calib_w[-1]:.3f}  (lower = better calibrated)")
 
-    # ---- auditoría de una decisión concreta ----
+    # ---- audit trail for one concrete decision ----
     last_decision_id = decision.id
     explanation = loop.explain(last_decision_id)
-    print(f"\nAuditoria de la ultima decision ({last_decision_id[:8]}...):")
+    print(f"\nAudit of the last decision ({last_decision_id[:8]}...):")
     print(f"  task_type: {explanation['decision'].task_type}")
-    print(f"  motor elegido: {explanation['decision'].chosen_engine}")
-    print(f"  confianza calibrada: {explanation['decision'].chosen_confidence:.3f}")
-    print(f"  umbral usado: {explanation['decision'].escalation_threshold_used:.3f}")
-    print(f"  fiabilidad aprendida por motor: {explanation['reliability_at_decision_time']}")
-    print(f"  outcomes registrados: {len(explanation['outcomes'])}")
+    print(f"  chosen engine: {explanation['decision'].chosen_engine}")
+    print(f"  calibrated confidence: {explanation['decision'].chosen_confidence:.3f}")
+    print(f"  threshold in force: {explanation['decision'].escalation_threshold_used:.3f}")
+    print(f"  learned reliability per engine: {explanation['reliability_at_decision_time']}")
+    print(f"  outcomes recorded: {len(explanation['outcomes'])}")
 
     try:
         import matplotlib.pyplot as plt  # type: ignore
@@ -179,18 +178,18 @@ def main() -> None:
         fig, axes = plt.subplots(3, 1, figsize=(8, 9), sharex=True)
         x = [i * WINDOW for i in range(len(acc_w))]
         axes[0].plot(x, acc_w)
-        axes[0].set_ylabel("precision")
+        axes[0].set_ylabel("accuracy")
         axes[1].plot(x, n_w)
-        axes[1].set_ylabel("motores/decision")
+        axes[1].set_ylabel("engines/decision")
         axes[2].plot(x, calib_w)
-        axes[2].set_ylabel("error calibracion")
+        axes[2].set_ylabel("calibration error")
         axes[2].set_xlabel("decision #")
-        fig.suptitle("DualLoop - recalibracion online sobre datos sinteticos")
+        fig.suptitle("DualLoop - online recalibration on synthetic data")
         out_path = Path(__file__).with_name("demo_synthetic_result.png")
         fig.savefig(out_path, dpi=120, bbox_inches="tight")
-        print(f"\nGrafico guardado en {out_path}")
+        print(f"\nPlot saved to {out_path}")
     except ImportError:
-        print("\n(instala el extra 'demo' -> pip install '.[demo]' para generar el grafico)")
+        print("\n(install the 'demo' extra -> pip install '.[demo]' to generate the plot)")
 
 
 if __name__ == "__main__":
