@@ -98,6 +98,16 @@ class AdaptiveThreshold:
     espera que la fiabilidad de los motores cambie con el tiempo (cambias
     de modelo, el servidor jev se actualiza, el dominio deriva).
 
+    **Sobre los límites.** `lo` es el suelo real del sistema: cuando los
+    motores rinden mejor que `target_error_rate`, el umbral baja hasta
+    pegarse a `lo` y se queda ahí, así que a partir de ese punto es `lo`
+    —y no `target_error_rate`— quien decide qué se acepta. Por eso el
+    suelo por defecto es 0.8 y no 0.5: aceptar una respuesta con un 50 %
+    de confianza calibrada rara vez es lo que se quiere, y con `lo` bajo
+    la abstención casi nunca salta. `default` arranca por encima del
+    suelo para que la adaptación a la baja tenga recorrido; con
+    `default == lo` el umbral solo podría subir.
+
     El equilibrio sí es el correcto: en régimen estacionario la tasa de
     error de lo aceptado tiende a `target_error_rate`, porque
     `p·lr·(1−t) = (1−p)·lr·t` se cumple exactamente en `p = t`.
@@ -112,13 +122,18 @@ class AdaptiveThreshold:
 
     def __init__(
         self,
-        default: float = 0.7,
+        default: float = 0.85,
         lr: float = 0.01,
         target_error_rate: float = 0.05,
-        lo: float = 0.5,
+        lo: float = 0.8,
         hi: float = 0.97,
     ) -> None:
-        self.default = default
+        # El suelo manda sobre el arranque: pedir `default` fuera de
+        # [lo, hi] no es un error del llamante, es una politica que los
+        # limites recortan. Sin esto un default por debajo del suelo daria
+        # un umbral inicial que ninguna actualizacion posterior podria
+        # devolver a ese valor, que es incoherente y silencioso.
+        self.default = min(max(default, lo), hi)
         self.lr = lr
         self.target_error_rate = target_error_rate
         self.lo = lo

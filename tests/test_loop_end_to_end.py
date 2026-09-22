@@ -25,7 +25,9 @@ QUESTION = Question(type="choice", instructions="elige", state="ctx", criteria={
 
 def test_decide_and_report_outcome_updates_state():
     engine = TogglableEngine("only")
-    loop = DualLoop(engines=[engine], store=InMemoryStore(), default_threshold=0.5)
+    loop = DualLoop(
+        engines=[engine], store=InMemoryStore(), default_threshold=0.5, threshold_lo=0.0
+    )
 
     decision = loop.decide("t", QUESTION)
     assert decision.chosen_value == "A"

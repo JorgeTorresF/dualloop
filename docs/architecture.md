@@ -132,9 +132,14 @@ sentido de Robbins-Monro**: oscila alrededor del equilibrio en vez de
 asentarse en él. Es deliberado — con paso decreciente el umbral acabaría
 congelado, y aquí se espera que la fiabilidad de los motores cambie con el
 tiempo. El equilibrio sí es el correcto: `p·lr·(1−t) = (1−p)·lr·t` se
-cumple exactamente en `p = t`. Con `lr=0.01` un fallo mueve el umbral un
-2 % del rango útil `[0.5, 0.97]`; un `lr` mayor lo vuelve nervioso ante
-errores aislados, uno menor lo hace más lento en adaptarse. Si el error observado supera el
+cumple exactamente en `p = t`.
+
+Con `lr=0.01` un fallo mueve el umbral +0.0095 en absoluto, y un acierto lo
+baja 0.0005. En relativo depende del rango: sobre el `[0.8, 0.97]` por
+defecto (0.17 de ancho) eso es un 5.6 % del recorrido posible; sobre un
+rango más permisivo como `[0.5, 0.97]` sería un 2 %. Conviene tenerlo
+presente porque `lr` y `lo` interactúan: subir el suelo estrecha el rango y
+vuelve relativamente más agresivo el mismo `lr`. Si el error observado supera el
 objetivo, el umbral sube (más exigente, escala más); si es menor, baja
 (menos escalamiento innecesario). Esto sustituye a un umbral fijo puesto a
 mano, que es lo que hacen hoy los routers comerciales revisados
@@ -188,7 +193,7 @@ difíciles) y mide, por ventanas de 50 decisiones: precisión de la respuesta
 aceptada, número medio de motores consultados por decisión (proxy de
 coste), y error de calibración (|confianza calibrada − acierto real|). En
 una corrida de referencia con semilla fija, el error de calibración bajó de
-0.152 a 0.054 a lo largo de la corrida sin ninguna intervención manual,
+0.129 a 0.036 a lo largo de la corrida sin ninguna intervención manual,
 mientras la precisión se mantuvo estable y el número de motores consultados
 por decisión se mantuvo bajo (~1.1-1.2 de media, es decir, la cascada
 resuelve la mayoría de los casos con un solo motor).

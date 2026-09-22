@@ -30,7 +30,10 @@ def make_arbiter(engines, threshold_default=0.7, max_engines=None, seed=0):
     bandit = ReliabilityBandit(
         cost_by_engine={e.name: e.relative_cost for e in engines}, seed=seed
     )
-    threshold = AdaptiveThreshold(default=threshold_default)
+    # Sin suelo: estos tests fijan umbrales bajos a proposito para
+    # controlar cuando escala la cascada. El suelo por defecto (0.8) es
+    # politica y aqui se prueba mecanica de arbitraje.
+    threshold = AdaptiveThreshold(default=threshold_default, lo=0.0)
     return Arbiter(engines_by_name, calibrators, bandit, threshold, max_engines_per_decision=max_engines)
 
 

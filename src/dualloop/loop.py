@@ -29,7 +29,9 @@ class DualLoop:
         *,
         store: Optional[Store] = None,
         seed: Optional[int] = None,
-        default_threshold: float = 0.7,
+        default_threshold: float = 0.85,
+        threshold_lo: Optional[float] = None,
+        threshold_hi: Optional[float] = None,
         max_engines_per_decision: Optional[int] = None,
         heuristics: Optional[list[OutcomeHeuristic]] = None,
         abstain_below_threshold: bool = False,
@@ -48,7 +50,14 @@ class DualLoop:
         self._calibrators: dict[tuple[str, str], ConfidenceCalibrator] = {}
         cost_by_engine = {name: e.relative_cost for name, e in self._engines_by_name.items()}
         self._bandit = ReliabilityBandit(cost_by_engine=cost_by_engine, seed=seed)
-        self._threshold = AdaptiveThreshold(default=default_threshold)
+        # lo/hi solo se pasan si el llamante los fija, para no duplicar
+        # aqui los valores por defecto de AdaptiveThreshold.
+        bounds = {}
+        if threshold_lo is not None:
+            bounds["lo"] = threshold_lo
+        if threshold_hi is not None:
+            bounds["hi"] = threshold_hi
+        self._threshold = AdaptiveThreshold(default=default_threshold, **bounds)
         self._arbiter = Arbiter(
             self._engines_by_name,
             self._calibrators,
