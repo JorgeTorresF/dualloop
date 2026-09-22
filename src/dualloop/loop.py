@@ -32,6 +32,7 @@ class DualLoop:
         default_threshold: float = 0.7,
         max_engines_per_decision: Optional[int] = None,
         heuristics: Optional[list[OutcomeHeuristic]] = None,
+        abstain_below_threshold: bool = False,
     ) -> None:
         if not engines:
             raise ValueError("DualLoop necesita al menos un motor")
@@ -54,6 +55,7 @@ class DualLoop:
             self._bandit,
             self._threshold,
             max_engines_per_decision=max_engines_per_decision,
+            abstain_below_threshold=abstain_below_threshold,
         )
         self._heuristics = heuristics or []
         self._load_state()
@@ -191,7 +193,13 @@ class DualLoop:
 
         if correct is not None:
             self._bandit.update(decision.task_type, decision.chosen_engine, correct)
-            self._threshold.update_on_accepted_outcome(decision.task_type, correct)
+            # El umbral persigue la tasa de error de lo ACEPTADO. Una
+            # decision en la que el loop se abstuvo no fue aceptada, asi
+            # que alimentarla aqui rompe la semantica del umbral: lo
+            # subiria por un error que el sistema ya habia senalado como
+            # dudoso. Los calibradores y el bandit si aprenden de ella.
+            if not decision.abstained:
+                self._threshold.update_on_accepted_outcome(decision.task_type, correct)
 
         self._save_state()
 

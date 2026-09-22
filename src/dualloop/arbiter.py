@@ -43,12 +43,14 @@ class Arbiter:
         threshold: AdaptiveThreshold,
         *,
         max_engines_per_decision: int | None = None,
+        abstain_below_threshold: bool = False,
     ) -> None:
         self._engines = engines
         self._calibrators = calibrators
         self._bandit = bandit
         self._threshold = threshold
         self._max_engines = max_engines_per_decision or len(engines)
+        self._abstain_below_threshold = abstain_below_threshold
 
     def _calibrator_for(self, task_type: str, engine_name: str) -> ConfidenceCalibrator:
         key = (task_type, engine_name)
@@ -103,6 +105,12 @@ class Arbiter:
             )
 
         disagreement = len({v.value for v in votes}) > 1
+        # Si se agoto la cascada sin que nadie alcanzara el umbral, el
+        # sistema no tiene una respuesta en la que confie. Marcarlo es lo
+        # honesto: decidir igualmente convierte el umbral en decorativo.
+        abstained = (
+            self._abstain_below_threshold and best.calibrated_confidence < threshold
+        )
 
         decision = Decision(
             id=Decision.new_id(),
@@ -114,5 +122,6 @@ class Arbiter:
             chosen_confidence=best.calibrated_confidence,
             escalation_threshold_used=threshold,
             disagreement=disagreement,
+            abstained=abstained,
         )
         return ArbitrationResult(decision=decision, consulted_engines=consulted)

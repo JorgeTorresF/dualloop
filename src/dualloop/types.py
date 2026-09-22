@@ -83,6 +83,13 @@ class Decision:
     chosen_confidence: float
     escalation_threshold_used: float
     disagreement: bool
+    abstained: bool = False
+    """True cuando ningun motor alcanzo el umbral y el loop se declara
+    incompetente para este caso (requiere `abstain_below_threshold=True`).
+
+    `chosen_value` sigue trayendo el mejor voto disponible, para que quien
+    integra pueda mostrarselo a la persona que decide; pero una decision
+    con `abstained=True` NO debe ejecutarse sin revision humana."""
     created_at: float = field(default_factory=time.time)
 
     @staticmethod

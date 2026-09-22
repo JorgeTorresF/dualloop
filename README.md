@@ -147,6 +147,29 @@ loop = DualLoop(engines=engines, store=SQLiteStore("dualloop.db"))
 Ver [`docs/architecture.md`](docs/architecture.md) para el detalle
 matemático y la justificación de cada elección de diseño.
 
+## Abstención: cuando el sistema no sabe
+
+Por defecto, si ningún motor alcanza el umbral, el loop acepta igualmente el
+voto de mayor confianza calibrada: el umbral queda registrado en la decisión
+pero no actúa como suelo. Para un gate donde «no sé, que lo mire una
+persona» es una respuesta legítima, eso no vale:
+
+```python
+loop = DualLoop(engines=engines, abstain_below_threshold=True)
+
+decision = loop.decide(task_type="gate_prescripcion", question=question)
+if decision.abstained:
+    enviar_a_revision_humana(decision)   # chosen_value sigue disponible
+else:
+    aplicar(decision.chosen_value)
+```
+
+Una decisión abstenida **no mueve el umbral de aceptación** cuando reportas
+su outcome: el umbral persigue la tasa de error de lo *aceptado*, y una
+abstención no se aceptó — endurecerlo por un caso que el propio sistema ya
+había marcado como dudoso rompería su semántica. Los calibradores y el
+bandit sí aprenden de ella.
+
 ## Demo sintética
 
 ```bash
