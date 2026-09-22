@@ -103,7 +103,15 @@ puedes leer entera.
 
 ## Instalación
 
-DualLoop es una librería, así que instálala dentro de un entorno virtual:
+DualLoop es una librería, así que va dentro de un entorno virtual. Las dos
+recetas de abajo crean `.venv` **en el directorio actual**, así que crea uno
+para tu proyecto antes:
+
+```bash
+mkdir dualloop-demo && cd dualloop-demo
+```
+
+Con las herramientas estándar:
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -116,11 +124,17 @@ O con [uv](https://github.com/astral-sh/uv):
 uv venv && uv pip install "dualloop @ git+https://github.com/JorgeTorresF/dualloop.git@v0.1.0"
 ```
 
-> Un `pip install` a secas contra el Python del sistema será rechazado en
-> macOS con Homebrew y en casi toda distribución Linux actual, que lo marcan
-> como gestionado externamente (PEP 668) con un error
-> `externally-managed-environment`. Ese rechazo está haciendo su trabajo:
-> usa un entorno virtual.
+Dos cosas que conviene saber antes de ejecutarlas:
+
+- **No las ejecutes desde tu carpeta personal.** Ahí apuntan a `~/.venv`, y
+  si ya existe un entorno en esa ruta `uv` se ofrece a reemplazarlo.
+  Responder que sí lo destruye, con todos sus paquetes dentro.
+- **Un `pip install` a secas contra el Python del sistema será rechazado**
+  en macOS con Homebrew y en casi toda distribución Linux actual, que lo
+  marcan como gestionado externamente (PEP 668) con un error
+  `externally-managed-environment`. Ese rechazo está haciendo su trabajo.
+  En un Python de Homebrew puede que ni siquiera haya un `pip` en tu PATH,
+  solo `pip3` y `python3 -m pip`.
 
 Quita el `@v0.1.0` para seguir `master` en vez de la versión publicada.
 
