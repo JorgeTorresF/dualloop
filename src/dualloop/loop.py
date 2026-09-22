@@ -221,6 +221,13 @@ class DualLoop:
 
     # --------------------------------------------- persistencia del estado
     def _save_state(self) -> None:
+        # Los calibradores se guardan en un unico blob, que se reescribe
+        # entero en cada outcome: el coste es O(pares task_type x motor).
+        # Es deliberado. Guardar un blob por calibrador obligaria a
+        # mantener ademas un indice, porque el protocolo `Store` no expone
+        # forma de enumerar claves, y el ahorro solo se nota con cientos de
+        # task_types. Si algun dia lo hace, ese es el cambio: un blob
+        # "calibrators::index" con las claves, mas uno por calibrador.
         self.store.save_state_blob("bandit", self._bandit.state_dict())
         self.store.save_state_blob("threshold", self._threshold.state_dict())
         self.store.save_state_blob(

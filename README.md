@@ -41,7 +41,7 @@ distinta) son dos piezas concretas:
 
 DualLoop no resuelve esto con un modelo nuevo, sino con matemática simple
 y auditable (calibración bayesiana por bins + bandits Beta-Bernoulli +
-aproximación estocástica de Robbins-Monro) que funciona con **cualquier
+aproximación estocástica de paso constante) que funciona con **cualquier
 motor, incluidos APIs cerradas de caja negra** — no requiere acceso a
 logits ni a los pesos del modelo, a diferencia de JitRL. El detalle
 completo de las decisiones de diseño y sus fuentes está en

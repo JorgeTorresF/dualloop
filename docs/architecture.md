@@ -71,7 +71,7 @@ DualLoop.report_outcome()
     │  actualiza en O(1), sin gradientes:
     │    - ConfidenceCalibrator.update()   (por motor y task_type)
     │    - ReliabilityBandit.update()      (fiabilidad del motor elegido)
-    │    - AdaptiveThreshold.update_on_accepted_outcome()  (Robbins-Monro)
+    │    - AdaptiveThreshold.update_on_accepted_outcome()  (paso constante)
     ▼
 Estado recalibrado, listo para la siguiente decision
 ```
@@ -122,10 +122,19 @@ bandit puede revertir si el motor barato resulta poco fiable para un
 
 ### 4. Umbral adaptativo (`AdaptiveThreshold`)
 
-Aproximación estocástica de Robbins-Monro: el umbral de aceptación por
+Aproximación estocástica de **paso constante**: el umbral de aceptación por
 `task_type` se desplaza hacia el punto donde la tasa de error de las
 respuestas aceptadas iguala una tasa objetivo configurable
-(`target_error_rate`, 5% por defecto). Si el error observado supera el
+(`target_error_rate`, 5% por defecto).
+
+El paso es constante y no decreciente, así que esto **no converge en el
+sentido de Robbins-Monro**: oscila alrededor del equilibrio en vez de
+asentarse en él. Es deliberado — con paso decreciente el umbral acabaría
+congelado, y aquí se espera que la fiabilidad de los motores cambie con el
+tiempo. El equilibrio sí es el correcto: `p·lr·(1−t) = (1−p)·lr·t` se
+cumple exactamente en `p = t`. Con `lr=0.01` un fallo mueve el umbral un
+2 % del rango útil `[0.5, 0.97]`; un `lr` mayor lo vuelve nervioso ante
+errores aislados, uno menor lo hace más lento en adaptarse. Si el error observado supera el
 objetivo, el umbral sube (más exigente, escala más); si es menor, baja
 (menos escalamiento innecesario). Esto sustituye a un umbral fijo puesto a
 mano, que es lo que hacen hoy los routers comerciales revisados
@@ -179,7 +188,7 @@ difíciles) y mide, por ventanas de 50 decisiones: precisión de la respuesta
 aceptada, número medio de motores consultados por decisión (proxy de
 coste), y error de calibración (|confianza calibrada − acierto real|). En
 una corrida de referencia con semilla fija, el error de calibración bajó de
-~0.15 a ~0.06 a lo largo de la corrida sin ninguna intervención manual,
+0.152 a 0.054 a lo largo de la corrida sin ninguna intervención manual,
 mientras la precisión se mantuvo estable y el número de motores consultados
 por decisión se mantuvo bajo (~1.1-1.2 de media, es decir, la cascada
 resuelve la mayoría de los casos con un solo motor).

@@ -13,11 +13,11 @@ from typing import Any, Optional
 import httpx
 
 from ..types import Question
-from .base import BaseEngine
+from .base import BaseEngine, HttpClientOwner
 from .llm_openai import _build_prompt, _parse_llm_json
 
 
-class AnthropicLLMEngine(BaseEngine):
+class AnthropicLLMEngine(HttpClientOwner, BaseEngine):
     """Motor 'System 2' vía Claude. relative_cost alto por defecto: va al
     final de la cascada salvo que el bandit aprenda lo contrario."""
 
@@ -45,6 +45,8 @@ class AnthropicLLMEngine(BaseEngine):
             "content-type": "application/json",
         }
         self._client = client or httpx.Client(timeout=timeout, headers=headers)
+        # Solo cerramos el cliente si lo hemos creado nosotros.
+        self._owns_client = client is None
 
     def _decide_raw(self, task_type: str, question: Question) -> tuple[Any, float, dict]:
         prompt = _build_prompt(question)

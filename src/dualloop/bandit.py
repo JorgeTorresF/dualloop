@@ -83,19 +83,37 @@ class ReliabilityBandit:
 
 class AdaptiveThreshold:
     """Umbral de aceptación por task_type, ajustado online vía aproximación
-    estocástica de Robbins-Monro.
+    estocástica de paso constante.
 
     Cada vez que se acepta una respuesta y se conoce su outcome real, el
     umbral se desplaza hacia el punto donde la tasa de error de las
     respuestas aceptadas iguala `target_error_rate`: si el error observado
     supera el objetivo, sube (más exigente, escala más); si es menor, baja
     un poco (menos escalamiento innecesario, más barato).
+
+    **Sobre el paso.** `lr` es constante, no decreciente, así que esto es
+    aproximación estocástica de **paso constante** y no converge en el
+    sentido de Robbins-Monro: oscila alrededor del equilibrio. Es
+    deliberado — con paso decreciente el umbral se congelaría, y aquí se
+    espera que la fiabilidad de los motores cambie con el tiempo (cambias
+    de modelo, el servidor jev se actualiza, el dominio deriva).
+
+    El equilibrio sí es el correcto: en régimen estacionario la tasa de
+    error de lo aceptado tiende a `target_error_rate`, porque
+    `p·lr·(1−t) = (1−p)·lr·t` se cumple exactamente en `p = t`.
+
+    Con los valores por defecto (`lr=0.01`, `target_error_rate=0.05`) un
+    fallo sube el umbral 0,0095 y un acierto lo baja 0,0005; sobre el rango
+    útil `[0.5, 0.97]` eso es un 2 % por fallo. Con el `lr=0.05` anterior
+    era un 10 % por fallo: un único error aislado movía el umbral
+    demasiado. El precio de bajarlo es que hacen falta unas cinco veces más
+    observaciones para recorrer la misma distancia.
     """
 
     def __init__(
         self,
         default: float = 0.7,
-        lr: float = 0.05,
+        lr: float = 0.01,
         target_error_rate: float = 0.05,
         lo: float = 0.5,
         hi: float = 0.97,

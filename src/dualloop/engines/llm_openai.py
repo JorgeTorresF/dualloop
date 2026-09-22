@@ -19,7 +19,7 @@ from typing import Any, Optional
 import httpx
 
 from ..types import Question
-from .base import BaseEngine
+from .base import BaseEngine, HttpClientOwner
 
 _PROMPT_TEMPLATE = """Eres un motor de decisión. Responde UNICAMENTE con un objeto JSON valido, sin texto adicional ni bloques de codigo.
 
@@ -71,7 +71,7 @@ def _parse_llm_json(content: str) -> dict:
         return json.loads(content[start : end + 1])
 
 
-class OpenAICompatibleLLMEngine(BaseEngine):
+class OpenAICompatibleLLMEngine(HttpClientOwner, BaseEngine):
     """Motor 'System 2': lento, caro, generalista. Va al final de la
     cascada por defecto (relative_cost alto)."""
 
@@ -95,6 +95,8 @@ class OpenAICompatibleLLMEngine(BaseEngine):
         self.extra_body = extra_body or {"response_format": {"type": "json_object"}}
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         self._client = client or httpx.Client(timeout=timeout, headers=headers)
+        # Solo cerramos el cliente si lo hemos creado nosotros.
+        self._owns_client = client is None
 
     def _decide_raw(self, task_type: str, question: Question) -> tuple[Any, float, dict]:
         prompt = _build_prompt(question)

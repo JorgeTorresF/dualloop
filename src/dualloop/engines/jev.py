@@ -18,10 +18,19 @@ from typing import Any, Optional
 import httpx
 
 from ..types import Question
-from .base import BaseEngine
+from .base import BaseEngine, HttpClientOwner
 
 
-class JevEngine(BaseEngine):
+#: Clave con la que se envia la pregunta al servidor jev y con la que se
+#: lee su respuesta. Es un identificador interno del protocolo, no una
+#: etiqueta de dominio: antes se usaba el `task_type`, lo que acoplaba la
+#: nomenclatura de tus tareas a lo que el servidor acepte como clave (y
+#: rompia con un task_type que llevara caracteres inesperados). Se envia y
+#: se lee la misma constante, asi que es autoconsistente.
+_QUESTION_KEY = "decision"
+
+
+class JevEngine(HttpClientOwner, BaseEngine):
     """Motor 'System 1': rápido, barato, tipado. Pensado para ir primero en
     la cascada de arbitraje (relative_cost bajo)."""
 
@@ -41,13 +50,15 @@ class JevEngine(BaseEngine):
         self.model = model
         self.timeout = timeout
         self._client = client or httpx.Client(timeout=timeout)
+        # Solo cerramos el cliente si lo hemos creado nosotros.
+        self._owns_client = client is None
 
     def _decide_raw(self, task_type: str, question: Question) -> tuple[Any, float, dict]:
         payload: dict[str, Any] = {
             "model": self.model,
             "state": question.state,
             "questions": {
-                task_type: {
+                _QUESTION_KEY: {
                     "type": question.type,
                     "instructions": question.instructions,
                     **({"criteria": question.criteria} if question.criteria else {}),
@@ -57,7 +68,7 @@ class JevEngine(BaseEngine):
         resp = self._client.post(f"{self.base_url}/v1/classifier", json=payload)
         resp.raise_for_status()
         data = resp.json()
-        answer = data["answers"][task_type]
+        answer = data["answers"][_QUESTION_KEY]
 
         if answer["type"] == "choice":
             return answer["choice"], float(answer["confidence"]), data

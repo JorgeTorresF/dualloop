@@ -15,6 +15,36 @@ from typing import Any
 from ..types import EngineOutput, Question
 
 
+class HttpClientOwner:
+    """Gestiona el ciclo de vida del cliente HTTP de un motor.
+
+    Un motor puede recibir un `httpx.Client` inyectado (para reutilizar
+    conexiones, fijar reintentos o testear) o crearse el suyo. Solo se
+    cierra **el que creó el motor**: el inyectado pertenece a quien lo
+    inyectó, y cerrarlo por nuestra cuenta romperia a cualquier otro que lo
+    comparta.
+
+    Los motores que lo usan sirven como gestor de contexto::
+
+        with JevEngine(base_url=..., model=...) as jev:
+            loop = DualLoop(engines=[jev])
+            ...
+    """
+
+    def close(self) -> None:
+        """Cierra el cliente HTTP si es nuestro. Idempotente."""
+        if getattr(self, "_owns_client", False):
+            self._client.close()
+            self._owns_client = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info) -> bool:
+        self.close()
+        return False
+
+
 class BaseEngine(ABC):
     """Clase base: mide latencia y atrapa errores de forma uniforme.
 
